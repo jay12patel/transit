@@ -161,12 +161,12 @@ async def seed_data():
         
     if await db.vehicles.count_documents({}) == 0:
         seeds = [
-            ("Tata Ace / Tenkor", "TR-01-AC-2046", "750 kg", "7 × 4 ft", 18, 900, "Available"),
-            ("Loading Tempo", "TR-02-LT-1188", "1.5 ton", "10 × 5 ft", 24, 1400, "Available"),
-            ("Loading Truck", "TR-03-LK-9302", "5 ton", "17 × 7 ft", 32, 2800, "On Trip"),
-            ("20 FT Container", "TR-04-CN-2020", "15 ton", "20 × 8 ft", 48, 5200, "Available"),
-            ("30 FT Container", "TR-05-CN-3030", "20 ton", "30 × 8 ft", 58, 6800, "Maintenance"),
-            ("Refrigerated Van", "TR-06-RV-7711", "2 ton", "14 × 6 ft", 38, 3200, "Available")
+            ("Tata Ace / Tenkor", "GJ-02-AC-2046", "750 kg", "7 × 4 ft", 18, 900, "Available"),
+            ("Loading Tempo", "GJ-02-LT-1188", "1.5 ton", "10 × 5 ft", 24, 1400, "Available"),
+            ("Loading Truck", "GJ-02-LK-9302", "5 ton", "17 × 7 ft", 32, 2800, "On Trip"),
+            ("20 FT Container", "GJ-02-CN-2020", "15 ton", "20 × 8 ft", 48, 5200, "Available"),
+            ("30 FT Container", "GJ-02-CN-3030", "20 ton", "30 × 8 ft", 58, 6800, "Maintenance"),
+            ("Refrigerated Van", "GJ-02-RV-7711", "2 ton", "14 × 6 ft", 38, 3200, "Available")
         ]
         await db.vehicles.insert_many([
             {
@@ -189,7 +189,7 @@ async def lifespan(app: FastAPI):
     yield
     client.close()
 
-app = FastAPI(title="TransitRoute Fleet API", lifespan=lifespan)
+app = FastAPI(title="Sachin Logistics API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -203,7 +203,7 @@ api = APIRouter(prefix="/api")
 
 @api.get("/")
 async def root():
-    return {"message": "TransitRoute Fleet API"}
+    return {"message": "Sachin Logistics API is Online"}
 
 @api.post("/auth/register")
 async def register(data: Register, response: Response):
@@ -221,11 +221,11 @@ async def register(data: Register, response: Response):
     }
     await db.users.insert_one(user)
     t = token(user)
-    # _id અને password_hash બંને દૂર કરો જેથી JSON એરર ન આવે
     public = {k: v for k, v in user.items() if k not in ["_id", "password_hash"]}
     public["token"] = t
-    response.set_cookie(key="access_token", value=t, httponly=False, samesite="lax", secure=False, path="/", max_age=86400)
+    response.set_cookie(key="access_token", value=t, httponly=True, samesite="none", secure=True, path="/", max_age=86400)
     return public
+
 @api.post("/auth/login")
 async def login(data: Login, response: Response):
     user = await db.users.find_one({"email": data.email.lower()})
@@ -235,7 +235,7 @@ async def login(data: Login, response: Response):
     t = token(user)
     public = {k: v for k, v in clean(user).items() if k != "password_hash"}
     public["token"] = t
-    response.set_cookie(key="access_token", value=t, httponly=False, samesite="lax", secure=False, path="/", max_age=86400)
+    response.set_cookie(key="access_token", value=t, httponly=True, samesite="none", secure=True, path="/", max_age=86400)
     return public
 
 @api.post("/auth/change-password")
@@ -250,7 +250,7 @@ async def change_password(data: PasswordChangeIn, user=Depends(current_user)):
 
 @api.post("/auth/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="access_token", path="/", samesite="none", secure=True)
     return {"ok": True}
 
 @api.get("/auth/me")
@@ -259,7 +259,6 @@ async def me(user=Depends(current_user)):
 
 @api.get("/customer/bookings")
 async def customer_bookings(user=Depends(current_user)):
-    # Fetch all bookings matching customer email
     return await db.bookings.find({"email": user["email"].lower()}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 @api.get("/vehicles")
