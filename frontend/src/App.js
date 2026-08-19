@@ -3,7 +3,7 @@ import axios from "axios";
 import { BrowserRouter, Link, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, CircleUserRound, ClipboardList, Gauge, KeyRound, LogOut, MapPin, Menu, Phone, Plus, Route as RouteIcon, ShieldCheck, Trash2, Truck, UserRound, X } from "lucide-react";
 import { Toaster, toast } from "sonner";
-import "./App.css";
+import "@/App.css";
 /* eslint-disable react/no-unstable-nested-components, no-empty */
 
 const API = `${process.env.REACT_APP_BACKEND_URL || "https://transit-1-l2b5.onrender.com"}/api`;
