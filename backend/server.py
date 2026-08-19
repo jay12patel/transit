@@ -77,16 +77,15 @@ async def transporter_or_admin(user=Depends(current_user)):
 
 class Register(BaseModel):
     name: str
-    email: EmailStr
+    email: str
     password: str
     phone: Optional[str] = ""
-    role: str = "customer"
+    role: Optional[str] = "customer"
     company_name: Optional[str] = ""
 
 class Login(BaseModel):
-    email: EmailStr
+    email: str
     password: str
-
 class PasswordChangeIn(BaseModel):
     old_password: str
     new_password: str
