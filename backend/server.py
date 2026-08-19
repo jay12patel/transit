@@ -8,7 +8,7 @@ load_dotenv()
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -22,24 +22,27 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Transit@2026!")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
-LOCK = asyncio.Lock()
 logging.basicConfig(level=logging.INFO)
 
 def now():
     return datetime.now(timezone.utc).isoformat()
 
-def hash_password(value):
-    return bcrypt.hashpw(value.encode(), bcrypt.gensalt()).decode()
+def hash_password(value: str) -> str:
+    return bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-def verify_password(value, hashed):
-    return bcrypt.checkpw(value.encode(), hashed.encode())
+def verify_password(value: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(value.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
 
-def token(user):
-    return jwt.encode(
-        {"sub": user["id"], "role": user["role"], "exp": datetime.now(timezone.utc).timestamp() + 86400},
-        JWT_SECRET,
-        algorithm="HS256"
-    )
+def generate_token(user: dict) -> str:
+    payload = {
+        "sub": str(user["id"]),
+        "role": str(user.get("role", "customer")),
+        "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7 # 7 days
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def clean(doc):
     if not doc:
@@ -60,10 +63,10 @@ async def current_user(request: Request):
         payload = jwt.decode(raw, JWT_SECRET, algorithms=["HS256"])
         user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
         if not user:
-            raise HTTPException(401, "Session expired")
+            raise HTTPException(401, "User not found")
         return user
     except Exception:
-        raise HTTPException(401, "Session expired")
+        raise HTTPException(401, "Invalid or expired session")
 
 async def admin_only(user=Depends(current_user)):
     if user.get("role") != "admin":
@@ -72,10 +75,10 @@ async def admin_only(user=Depends(current_user)):
 
 async def transporter_or_admin(user=Depends(current_user)):
     if user.get("role") not in ["transporter", "admin"]:
-        raise HTTPException(403, "Transporter or Admin access required")
+        raise HTTPException(403, "Transporter access required")
     return user
 
-class Register(BaseModel):
+class RegisterIn(BaseModel):
     name: str
     email: str
     password: str
@@ -83,21 +86,18 @@ class Register(BaseModel):
     role: Optional[str] = "customer"
     company_name: Optional[str] = ""
 
-class Login(BaseModel):
+class LoginIn(BaseModel):
     email: str
     password: str
-class PasswordChangeIn(BaseModel):
-    old_password: str
-    new_password: str
 
 class VehicleIn(BaseModel):
     vehicle_type: str
-    vehicle_number: str = ""
+    vehicle_number: Optional[str] = ""
     capacity: str
-    size: str = ""
+    size: Optional[str] = ""
     rate_per_km: float = 0
     minimum_fare: float = 0
-    status: str = "Available"
+    status: Optional[str] = "Available"
 
 class BookingIn(BaseModel):
     customer_name: Optional[str] = ""
@@ -118,29 +118,29 @@ class BookingIn(BaseModel):
     instructions: Optional[str] = ""
     trip_type: Optional[str] = "One Way"
     payment_method: Optional[str] = "Pay Later"
-    loading_charge: Optional[float] = 0
-    waiting_charge: Optional[float] = 0
-    other_charges: Optional[float] = 0
-    gst: Optional[float] = 0
     estimated_total: Optional[float] = 0
 
 class StatusIn(BaseModel):
     status: str
 
 async def seed_data():
-    await db.users.create_index("email", unique=True)
-    existing = await db.users.find_one({"email": ADMIN_EMAIL})
-    if not existing:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "name": "Super Admin (Owner)",
-            "email": ADMIN_EMAIL,
-            "password_hash": hash_password(ADMIN_PASSWORD),
-            "role": "admin",
-            "phone": "9725506630",
-            "company_name": "Sachin Logistics Platform",
-            "created_at": now()
-        })
+    try:
+        await db.users.create_index("email", unique=True)
+        existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
+        if not existing:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Super Admin",
+                "email": ADMIN_EMAIL.lower(),
+                "password_hash": hash_password(ADMIN_PASSWORD),
+                "role": "admin",
+                "phone": "9725506630",
+                "company_name": "Platform Owner",
+                "created_at": now()
+            })
+            logging.info("Admin seeded successfully")
+    except Exception as e:
+        logging.error(f"Seed Error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -150,15 +150,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Logistics Platform API", lifespan=lifespan)
 
-origins = [
-    "http://localhost:3000",
-    "https://transit-jade.vercel.app",
-    "https://transit-ops-jade.vercel.app",
-]
-
+# CORS Middleware Setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -167,47 +162,71 @@ app.add_middleware(
 api = APIRouter(prefix="/api")
 
 @api.get("/")
+@app.get("/")
 async def root():
-    return {"message": "Logistics Marketplace API is Online"}
+    return {"status": "ok", "message": "Logistics API is running live"}
 
 @api.post("/auth/register")
-async def register(data: Register, response: Response):
-    email = data.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(409, "Email already registered")
+async def register(data: RegisterIn, response: Response):
+    clean_email = data.email.strip().lower()
+    if not clean_email or not data.password:
+        raise HTTPException(400, "Email and password are required")
+        
+    existing = await db.users.find_one({"email": clean_email})
+    if existing:
+        raise HTTPException(400, "This email is already registered. Please login instead.")
     
     role = "transporter" if data.role == "transporter" else "customer"
-    user = {
-        "id": str(uuid.uuid4()),
-        "name": data.name,
-        "email": email,
-        "phone": data.phone,
-        "company_name": data.company_name,
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "name": data.name.strip() or "User",
+        "email": clean_email,
+        "phone": data.phone.strip(),
+        "company_name": data.company_name.strip(),
         "password_hash": hash_password(data.password),
         "role": role,
         "created_at": now()
     }
-    await db.users.insert_one(user)
-    t = token(user)
-    public = {k: v for k, v in user.items() if k not in ["_id", "password_hash"]}
-    public["token"] = t
-    response.set_cookie(key="access_token", value=t, httponly=True, samesite="none", secure=True, path="/", max_age=86400)
-    return public
+    
+    await db.users.insert_one(user_doc)
+    t = generate_token(user_doc)
+    
+    public_user = {
+        "id": user_id,
+        "name": user_doc["name"],
+        "email": user_doc["email"],
+        "phone": user_doc["phone"],
+        "role": user_doc["role"],
+        "company_name": user_doc["company_name"],
+        "token": t
+    }
+    return public_user
 
 @api.post("/auth/login")
-async def login(data: Login, response: Response):
-    user = await db.users.find_one({"email": data.email.lower()})
-    if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(401, "Email or password is incorrect")
-    t = token(user)
-    public = {k: v for k, v in clean(user).items() if k != "password_hash"}
-    public["token"] = t
-    response.set_cookie(key="access_token", value=t, httponly=True, samesite="none", secure=True, path="/", max_age=86400)
-    return public
+async def login(data: LoginIn, response: Response):
+    clean_email = data.email.strip().lower()
+    user = await db.users.find_one({"email": clean_email})
+    if not user:
+        raise HTTPException(400, "Account not found. Please register first.")
+    
+    if not verify_password(data.password, user.get("password_hash", "")):
+        raise HTTPException(400, "Incorrect password. Please try again.")
+        
+    t = generate_token(user)
+    public_user = {
+        "id": user["id"],
+        "name": user.get("name", "User"),
+        "email": user["email"],
+        "phone": user.get("phone", ""),
+        "role": user.get("role", "customer"),
+        "company_name": user.get("company_name", ""),
+        "token": t
+    }
+    return public_user
 
 @api.post("/auth/logout")
-async def logout(response: Response):
-    response.delete_cookie(key="access_token", path="/", samesite="none", secure=True)
+async def logout():
     return {"ok": True}
 
 @api.get("/auth/me")
