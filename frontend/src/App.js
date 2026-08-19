@@ -317,6 +317,7 @@ function Booking({ vehicles = [], user }) {
         vehicle_id: safeVehicles.find((v) => v.vehicle_type === params.get("vehicle"))?.id || safeVehicles[0].id
       }));
     }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeVehicles, params]);
 
   const set = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
