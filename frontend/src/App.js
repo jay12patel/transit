@@ -1,21 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { BrowserRouter, Link, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ArrowRight, CircleUserRound, LogOut, Plus, Route as RouteIcon, Truck } from "lucide-react";
+import { ArrowRight, CircleUserRound, LogOut, Plus, Route as RouteIcon, Truck, Phone, Mail, MapPin, CheckCircle, ShieldCheck, Search, Filter } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import "./App.css";
 
-// Fix backend URL directly
 const API = "https://transit-1-l2b5.onrender.com/api";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
-
 const api = axios.create({ baseURL: API });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("transit_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -26,7 +22,7 @@ function Header({ user, setUser }) {
   const handleLogout = () => {
     localStorage.removeItem("transit_token");
     setUser(null);
-    toast.success("Signed out");
+    toast.success("Signed out successfully");
     nav("/login");
   };
 
@@ -44,28 +40,60 @@ function Header({ user, setUser }) {
       </Link>
       <nav className="desktop-nav">
         <Link className={loc.pathname === "/" ? "active" : ""} to="/">Home</Link>
-        <Link className={loc.pathname === "/vehicles" ? "active" : ""} to="/vehicles">Fleet</Link>
-        <Link className={loc.pathname === "/book" ? "active" : ""} to="/book">Book Vehicle</Link>
+        <Link className={loc.pathname === "/vehicles" ? "active" : ""} to="/vehicles">Available Fleet</Link>
+        <Link className={loc.pathname === "/about" ? "active" : ""} to="/about">About Us</Link>
+        <Link className={loc.pathname === "/services" ? "active" : ""} to="/services">Services</Link>
+        <Link className={loc.pathname === "/contact" ? "active" : ""} to="/contact">Contact Us</Link>
       </nav>
       <div className="header-actions">
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Link to={getDashboardLink()} className="text-link" style={{ fontWeight: 600 }}>
-              <CircleUserRound size={16} style={{ verticalAlign: "middle", marginRight: 4 }} />
-              {user.name} ({user.role})
+            <Link to={getDashboardLink()} className="button button-outline" style={{ padding: "6px 12px", fontSize: 13 }}>
+              <CircleUserRound size={16} /> {user.name} ({user.role})
             </Link>
             <button onClick={handleLogout} className="button button-quiet" style={{ padding: "6px 10px", fontSize: 13 }}>
-              <LogOut size={14} /> Logout
+              <LogOut size={14} />
             </button>
           </div>
         ) : (
-          <Link to="/login" className="text-link">Login / Register</Link>
+          <Link to="/login" className="button button-outline">Login / Register</Link>
         )}
-        <Link to="/book" className="button button-primary header-book">
-          Book Load <ArrowRight size={16} />
+        <Link to="/vehicles" className="button button-primary header-book">
+          Book Vehicle <ArrowRight size={16} />
         </Link>
       </div>
     </header>
+  );
+}
+
+function Footer() {
+  return (
+    <footer style={{ background: "#0f172a", color: "#94a3b8", padding: "40px 5%", marginTop: 80, borderTop: "1px solid #1e293b" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 30 }}>
+        <div>
+          <h3 style={{ color: "#fff", marginBottom: 12 }}>SACHIN LOGISTICS</h3>
+          <p style={{ fontSize: 14 }}>Gujarat's leading open logistics network directly connecting local fleet owners with business load requirements.</p>
+        </div>
+        <div>
+          <h4 style={{ color: "#fff", marginBottom: 12 }}>Quick Links</h4>
+          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, fontSize: 14 }}>
+            <li><Link to="/" style={{ color: "#94a3b8", textDecoration: "none" }}>Home</Link></li>
+            <li><Link to="/about" style={{ color: "#94a3b8", textDecoration: "none" }}>About Us</Link></li>
+            <li><Link to="/services" style={{ color: "#94a3b8", textDecoration: "none" }}>Our Services</Link></li>
+            <li><Link to="/contact" style={{ color: "#94a3b8", textDecoration: "none" }}>Contact Support</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 style={{ color: "#fff", marginBottom: 12 }}>Direct Contact</h4>
+          <p style={{ fontSize: 14, marginBottom: 6 }}><Phone size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> +91 97255 06630</p>
+          <p style={{ fontSize: 14, marginBottom: 6 }}><Mail size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> admin@transitroute.in</p>
+          <p style={{ fontSize: 14 }}><MapPin size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> Ahmedabad - Mehsana Highway, Gujarat</p>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", borderTop: "1px solid #1e293b", marginTop: 30, paddingTop: 20, fontSize: 13 }}>
+        © 2026 Sachin Logistics Platform. All Rights Reserved.
+      </div>
+    </footer>
   );
 }
 
@@ -76,10 +104,9 @@ function Status({ value }) {
 function Auth({ setUser }) {
   const [mode, setMode] = useState("login");
   const [role, setRole] = useState("customer");
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
@@ -89,15 +116,10 @@ function Auth({ setUser }) {
     setLoading(true);
     try {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-      const payload = mode === "login" 
-        ? { email, password } 
-        : { name, email, password, phone, role, company_name: companyName };
-      
+      const payload = mode === "login" ? { phone, password } : { name, phone, password, role, company_name: companyName };
       const res = await api.post(endpoint, payload);
       
-      if (res.data?.token) {
-        localStorage.setItem("transit_token", res.data.token);
-      }
+      if (res.data?.token) localStorage.setItem("transit_token", res.data.token);
       setUser(res.data);
       toast.success(mode === "login" ? "Logged in successfully!" : "Account created successfully!");
       
@@ -105,10 +127,7 @@ function Auth({ setUser }) {
       else if (res.data.role === "transporter") nav("/transporter-dashboard");
       else nav("/customer-dashboard");
     } catch (err) {
-      console.error("Auth Error:", err);
-      const detail = err.response?.data?.detail;
-      const msg = typeof detail === "string" ? detail : (err.message || "Authentication failed");
-      toast.error(msg);
+      toast.error(err.response?.data?.detail || err.message || "Auth failed");
     } finally {
       setLoading(false);
     }
@@ -116,19 +135,19 @@ function Auth({ setUser }) {
 
   return (
     <main className="auth-page">
-      <div className="auth-form" style={{ maxWidth: 440, margin: "40px auto", padding: 24, background: "#fff", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+      <div className="auth-form" style={{ maxWidth: 440, margin: "40px auto", padding: 24, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
           <button type="button" className={`button ${mode === "login" ? "button-primary" : "button-quiet"}`} style={{ flex: 1 }} onClick={() => setMode("login")}>Sign in</button>
           <button type="button" className={`button ${mode === "register" ? "button-primary" : "button-quiet"}`} style={{ flex: 1 }} onClick={() => setMode("register")}>Register</button>
         </div>
 
-        <h2>{mode === "login" ? "Sign in to Platform" : "Create New Account"}</h2>
+        <h2>{mode === "login" ? "Mobile Login" : "Create Account"}</h2>
         
         <form onSubmit={handleAuth} style={{ marginTop: 16 }}>
           {mode === "register" && (
             <>
               <div className="field" style={{ marginBottom: 12 }}>
-                <label>ACCOUNT TYPE</label>
+                <label>I AM A:</label>
                 <select value={role} onChange={(e) => setRole(e.target.value)}>
                   <option value="customer">Customer (મારે સામાન મોકલવો છે)</option>
                   <option value="transporter">Transporter (હું વાહન માલિક છું)</option>
@@ -136,32 +155,85 @@ function Auth({ setUser }) {
               </div>
               <div className="field" style={{ marginBottom: 12 }}>
                 <label>{role === "transporter" ? "OWNER NAME" : "FULL NAME"}</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Enter name" />
+                <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Enter full name" />
               </div>
               {role === "transporter" && (
                 <div className="field" style={{ marginBottom: 12 }}>
-                  <label>COMPANY / TRANSPORT NAME</label>
-                  <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Mahadev Transport" />
+                  <label>TRANSPORT / FLEET NAME</label>
+                  <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Mahadev Roadways" />
                 </div>
               )}
-              <div className="field" style={{ marginBottom: 12 }}>
-                <label>MOBILE NUMBER</label>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="10-digit number" />
-              </div>
             </>
           )}
           <div className="field" style={{ marginBottom: 12 }}>
-            <label>EMAIL ADDRESS</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="name@example.com" />
+            <label>MOBILE NUMBER</label>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="10-digit mobile number" maxLength={10} />
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>PASSWORD</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
           </div>
           <button type="submit" disabled={loading} className="button button-primary" style={{ width: "100%", padding: "12px", justifyContent: "center" }}>
-            {loading ? "Processing..." : mode === "login" ? "Sign in" : "Create Account"}
+            {loading ? "Processing..." : mode === "login" ? "Sign in with Mobile" : "Create Account"}
           </button>
         </form>
+      </div>
+    </main>
+  );
+}
+
+function FleetSearchPage({ vehicles = [] }) {
+  const [searchCity, setSearchCity] = useState("");
+  const [selectedType, setSelectedType] = useState("All");
+
+  const filtered = vehicles.filter((v) => {
+    const matchType = selectedType === "All" || v.vehicle_type.toLowerCase().includes(selectedType.toLowerCase());
+    return matchType;
+  });
+
+  return (
+    <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 5%" }}>
+      <div className="page-intro" style={{ marginBottom: 30 }}>
+        <h1>Search & Book Vehicles</h1>
+        <p>Find available commercial vehicles across Gujarat with direct rates.</p>
+      </div>
+
+      {/* Filter Box */}
+      <div style={{ background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 30 }}>
+        <div className="field">
+          <label>VEHICLE CATEGORY</label>
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+            <option value="All">All Types (બધા વાહનો)</option>
+            <option value="Tata Ace">Tata Ace / Chhota Hathi</option>
+            <option value="Bolero">Bolero Pickup</option>
+            <option value="Eicher">Eicher 14/19 Ft</option>
+            <option value="Truck">Heavy Truck / Trailer</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="vehicle-grid">
+        {filtered.length === 0 ? (
+          <p>No vehicles found matching your criteria.</p>
+        ) : (
+          filtered.map((v) => (
+            <article className="vehicle-card" key={v.id}>
+              <div className="vehicle-visual"><Truck size={52} /></div>
+              <div className="vehicle-info">
+                <div className="eyebrow">{v.size} · {v.capacity}</div>
+                <h3>{v.vehicle_type}</h3>
+                {v.transporter_name && <small style={{ color: "#64748b" }}>Owner: {v.transporter_name}</small>}
+                <div className="vehicle-rate" style={{ marginTop: 8 }}>₹{v.rate_per_km}/km</div>
+                <div className="card-actions" style={{ marginTop: 12 }}>
+                  <Link to={`/book?vehicle_id=${v.id}`} className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>
+                    Book Vehicle <ArrowRight size={15} />
+                  </Link>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </main>
   );
@@ -171,7 +243,7 @@ function TransporterDashboard({ user }) {
   const [vehicles, setVehicles] = useState([]);
   const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState("Orders");
-  const [newVeh, setNewVeh] = useState({ vehicle_type: "", vehicle_number: "", capacity: "", size: "", rate_per_km: 25, minimum_fare: 1500, status: "Available" });
+  const [newVeh, setNewVeh] = useState({ vehicle_type: "Tata Ace", vehicle_number: "", capacity: "1.5 Ton", size: "8x4 ft", rate_per_km: 25, minimum_fare: 1500 });
 
   const loadData = useCallback(async () => {
     try {
@@ -188,50 +260,39 @@ function TransporterDashboard({ user }) {
     try {
       await api.post("/vehicles", newVeh);
       toast.success("Vehicle registered!");
-      setNewVeh({ vehicle_type: "", vehicle_number: "", capacity: "", size: "", rate_per_km: 25, minimum_fare: 1500, status: "Available" });
       loadData();
     } catch { toast.error("Failed to add vehicle"); }
   };
 
-  const updateStatus = async (bookingId, status) => {
-    await api.patch(`/bookings/${bookingId}/status`, { status });
-    toast.success(`Booking ${status}`);
-    loadData();
-  };
-
   return (
-    <main className="page" style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <main className="page" style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
         <div>
           <div className="eyebrow">TRANSPORTER FLEET PANEL</div>
           <h1>{user?.company_name || user?.name}</h1>
-          <p>{user?.email} · {user?.phone}</p>
+          <p>Phone: {user?.phone} · Only your orders and vehicles are visible here.</p>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, borderBottom: "1px solid #e2e8f0", marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 12, borderBottom: "1px solid #e2e8f0", margin: "20px 0" }}>
         {["Orders", "My Fleet"].map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 16px", background: "none", border: "none", borderBottom: tab === t ? "3px solid var(--blue)" : "3px solid transparent", fontWeight: tab === t ? "bold" : "normal", cursor: "pointer" }}>{t}</button>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 16px", background: "none", border: "none", borderBottom: tab === t ? "3px solid #2563eb" : "3px solid transparent", fontWeight: tab === t ? "bold" : "normal", cursor: "pointer" }}>{t}</button>
         ))}
       </div>
 
       {tab === "Orders" && (
         <div>
-          <h2>Incoming Booking Requests ({orders.length})</h2>
+          <h2>My Assigned Orders ({orders.length})</h2>
           <div className="booking-table" style={{ marginTop: 16 }}>
-            <div className="table-head"><span>Order ID</span><span>Customer</span><span>Route</span><span>Vehicle</span><span>Amount</span><span>Status</span><span>Action</span></div>
+            <div className="table-head"><span>Order ID</span><span>Customer</span><span>Route</span><span>Fare</span><span>Payment</span><span>Status</span></div>
             {orders.map((b) => (
-              <div className="table-row" key={b.id || b.booking_id}>
-                <span className="mono"><b>{b.booking_id}</b></span>
-                <span>{b.customer_name} ({b.mobile})</span>
+              <div className="table-row" key={b.booking_id}>
+                <span><b>{b.booking_id}</b></span>
+                <span>{b.customer_name} ({b.customer_phone})</span>
                 <span>{b.pickup_city} → {b.delivery_city}</span>
-                <span>{b.vehicle_type}</span>
                 <span>{money(b.estimated_total)}</span>
+                <Status value={b.payment_status} />
                 <Status value={b.status} />
-                <span className="row-actions">
-                  {b.status === "Pending Confirmation" && <button onClick={() => updateStatus(b.booking_id, "Confirmed")}>Accept</button>}
-                  {b.status === "Confirmed" && <button onClick={() => updateStatus(b.booking_id, "Completed")}>Complete</button>}
-                </span>
               </div>
             ))}
           </div>
@@ -240,29 +301,24 @@ function TransporterDashboard({ user }) {
 
       {tab === "My Fleet" && (
         <div>
-          <form onSubmit={handleAddVehicle} style={{ background: "#f8f9fa", padding: 20, borderRadius: 8, marginBottom: 24, border: "1px solid #e2e8f0" }}>
+          <form onSubmit={handleAddVehicle} style={{ background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 24 }}>
             <h3>+ Register Vehicle</h3>
             <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
-              <div className="field"><label>VEHICLE TYPE</label><input placeholder="Tata Ace / Bolero" value={newVeh.vehicle_type} onChange={(e) => setNewVeh({ ...newVeh, vehicle_type: e.target.value })} required /></div>
+              <div className="field"><label>VEHICLE TYPE</label><input placeholder="e.g. Tata Ace / Bolero" value={newVeh.vehicle_type} onChange={(e) => setNewVeh({ ...newVeh, vehicle_type: e.target.value })} required /></div>
               <div className="field"><label>PLATE NO.</label><input placeholder="GJ-02-XX-1234" value={newVeh.vehicle_number} onChange={(e) => setNewVeh({ ...newVeh, vehicle_number: e.target.value })} required /></div>
               <div className="field"><label>CAPACITY</label><input placeholder="1.5 Ton" value={newVeh.capacity} onChange={(e) => setNewVeh({ ...newVeh, capacity: e.target.value })} required /></div>
-              <div className="field"><label>SIZE</label><input placeholder="8 × 4 ft" value={newVeh.size} onChange={(e) => setNewVeh({ ...newVeh, size: e.target.value })} /></div>
               <div className="field"><label>RATE / KM (₹)</label><input type="number" value={newVeh.rate_per_km} onChange={(e) => setNewVeh({ ...newVeh, rate_per_km: Number(e.target.value) })} required /></div>
-              <div className="field"><label>BASE FARE (₹)</label><input type="number" value={newVeh.minimum_fare} onChange={(e) => setNewVeh({ ...newVeh, minimum_fare: Number(e.target.value) })} required /></div>
             </div>
             <button type="submit" className="button button-primary" style={{ marginTop: 14 }}><Plus size={16} /> Add Vehicle</button>
           </form>
-
-          <h3>My Registered Fleet ({vehicles.length})</h3>
-          <div className="booking-table" style={{ marginTop: 14 }}>
-            <div className="table-head"><span>Vehicle</span><span>Plate Number</span><span>Capacity</span><span>Rate</span><span>Base Fare</span></div>
+          <div className="booking-table">
+            <div className="table-head"><span>Type</span><span>Number</span><span>Capacity</span><span>Rate</span></div>
             {vehicles.map((v) => (
               <div className="table-row" key={v.id}>
                 <span><b>{v.vehicle_type}</b></span>
                 <span>{v.vehicle_number}</span>
-                <span>{v.capacity} ({v.size})</span>
+                <span>{v.capacity}</span>
                 <span>₹{v.rate_per_km}/km</span>
-                <span>{money(v.minimum_fare)}</span>
               </div>
             ))}
           </div>
@@ -272,36 +328,44 @@ function TransporterDashboard({ user }) {
   );
 }
 
-function SuperAdminPanel({ user }) {
-  const [data, setData] = useState({ users: [] });
-  useEffect(() => {
-    api.get("/admin/dashboard").then((r) => setData(r.data)).catch(() => {});
-  }, []);
+function SuperAdminPanel() {
+  const [data, setData] = useState({ users: [], bookings: [] });
+  const loadAdmin = () => api.get("/admin/dashboard").then((r) => setData(r.data)).catch(() => {});
+  useEffect(() => { loadAdmin(); }, []);
+
+  const handleApprovePayment = async (bid, status) => {
+    await api.patch(`/admin/bookings/${bid}/payment`, { payment_status: status });
+    toast.success(`Payment ${status}!`);
+    loadAdmin();
+  };
 
   return (
-    <main className="page" style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
         <div>
           <div className="eyebrow">PLATFORM OWNER DESK</div>
-          <h1>Super Admin Overview</h1>
-          <p>Master control for all Transporters, Customers & Platform Bookings</p>
+          <h1>Super Admin Control</h1>
+          <p>Manage all orders, verify customer/transporter direct numbers & approve payments.</p>
         </div>
       </div>
-      <div className="kpi-grid" style={{ marginTop: 20 }}>
-        <div className="kpi"><span>Total Platform Users</span><strong>{data.total_users || 0}</strong></div>
-        <div className="kpi"><span>Active Transporters</span><strong>{data.total_transporters || 0}</strong></div>
-        <div className="kpi"><span>Registered Customers</span><strong>{data.total_customers || 0}</strong></div>
-        <div className="kpi"><span>Marketplace Fleet</span><strong>{data.total_vehicles || 0}</strong></div>
-      </div>
-      <h2 style={{ marginTop: 30 }}>All Registered Platform Users</h2>
-      <div className="booking-table" style={{ marginTop: 14 }}>
-        <div className="table-head"><span>Name / Business</span><span>Email</span><span>Phone</span><span>Account Type</span></div>
-        {(data.users || []).map((u) => (
-          <div className="table-row" key={u.id}>
-            <span><b>{u.name}</b> {u.company_name && <small>({u.company_name})</small>}</span>
-            <span>{u.email}</span>
-            <span>{u.phone || "—"}</span>
-            <span style={{ textTransform: "uppercase", fontWeight: "bold", color: u.role === "transporter" ? "#0284c7" : "#16a34a" }}>{u.role}</span>
+
+      <h2 style={{ marginTop: 24 }}>All Platform Bookings & Payment Gateway Approvals</h2>
+      <div className="booking-table" style={{ marginTop: 16 }}>
+        <div className="table-head"><span>Order ID</span><span>Customer (Phone)</span><span>Transporter (Phone)</span><span>Amount</span><span>Payment</span><span>Action</span></div>
+        {(data.bookings || []).map((b) => (
+          <div className="table-row" key={b.booking_id}>
+            <span><b>{b.booking_id}</b></span>
+            <span>{b.customer_name}<br /><small style={{ color: "#2563eb" }}>📱 {b.customer_phone}</small></span>
+            <span>{b.transporter_name}<br /><small style={{ color: "#16a34a" }}>📱 {b.transporter_phone || "Not Assigned"}</small></span>
+            <span>{money(b.estimated_total)}</span>
+            <Status value={b.payment_status} />
+            <span className="row-actions">
+              {b.payment_status !== "Approved" && (
+                <button className="button button-primary" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => handleApprovePayment(b.booking_id, "Approved")}>
+                  Approve Payment
+                </button>
+              )}
+            </span>
           </div>
         ))}
       </div>
@@ -316,161 +380,84 @@ function CustomerDashboard({ user }) {
   }, []);
 
   return (
-    <main className="page" style={{ maxWidth: 1000, margin: "0 auto" }}>
+    <main className="page" style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
-        <div>
-          <div className="eyebrow">CUSTOMER DASHBOARD</div>
-          <h1>Hello, {user?.name}</h1>
-          <p>{user?.email} · {user?.phone}</p>
-        </div>
+        <h1>Welcome, {user?.name}</h1>
+        <p>📱 {user?.phone} · Customer Load Panel</p>
       </div>
-      <h2 style={{ marginTop: 20 }}>My Booking Requests ({bookings.length})</h2>
-      {bookings.length === 0 ? (
-        <div style={{ padding: 30, textAlign: "center", background: "#f8f9fa", borderRadius: 8, marginTop: 12 }}>
-          <p>No dispatch requests placed yet.</p>
-          <Link to="/book" className="button button-primary" style={{ marginTop: 12, display: "inline-flex" }}>Book a Vehicle</Link>
-        </div>
-      ) : (
-        <div className="booking-table" style={{ marginTop: 16 }}>
-          <div className="table-head"><span>Booking ID</span><span>Route</span><span>Vehicle</span><span>Pickup Schedule</span><span>Estimate</span><span>Status</span></div>
-          {bookings.map((b) => (
-            <div className="table-row" key={b.id || b.booking_id}>
-              <span className="mono"><b>{b.booking_id}</b></span>
-              <span>{b.pickup_city} → {b.delivery_city}</span>
-              <span>{b.vehicle_type}</span>
-              <span>{b.pickup_date} ({b.pickup_time})</span>
-              <span>{money(b.estimated_total)}</span>
-              <Status value={b.status} />
-            </div>
-          ))}
-        </div>
-      )}
-    </main>
-  );
-}
-
-function Home({ vehicles = [] }) {
-  const safe = Array.isArray(vehicles) ? vehicles : [];
-  return (
-    <main>
-      <section className="hero">
-        <div className="hero-copy">
-          <div className="eyebrow hero-eyebrow"><span className="signal-dot"></span> Logistics Marketplace · Gujarat</div>
-          <h1>Connect Fleet.<br /><em>Direct Dispatch.</em></h1>
-          <p className="hero-lede">Open logistics platform connecting businesses with verified vehicle fleet owners.</p>
-          <div className="hero-actions">
-            <Link to="/book" className="button button-primary button-large">Book a Vehicle <ArrowRight size={18} /></Link>
-            <Link to="/login" className="button button-outline button-large">Join as Transporter</Link>
+      <h2 style={{ marginTop: 20 }}>My Booking Status</h2>
+      <div className="booking-table" style={{ marginTop: 16 }}>
+        <div className="table-head"><span>Booking ID</span><span>Route</span><span>Fare</span><span>Payment Approval</span><span>Dispatch Status</span></div>
+        {bookings.map((b) => (
+          <div className="table-row" key={b.booking_id}>
+            <span><b>{b.booking_id}</b></span>
+            <span>{b.pickup_city} → {b.delivery_city}</span>
+            <span>{money(b.estimated_total)}</span>
+            <Status value={b.payment_status} />
+            <Status value={b.status} />
           </div>
-        </div>
-      </section>
-      <section className="section catalog-preview">
-        <div className="section-heading"><div><div className="eyebrow">LIVE MARKETPLACE FLEET</div><h2>Available Fleet Vehicles</h2></div></div>
-        <div className="vehicle-grid">
-          {safe.length === 0 ? <p>Loading fleet...</p> : safe.slice(0, 6).map((v) => (
-            <article className="vehicle-card" key={v.id}>
-              <div className="vehicle-visual"><Truck size={52} /></div>
-              <div className="vehicle-info">
-                <div className="eyebrow">{v.size} · {v.capacity}</div>
-                <h3>{v.vehicle_type}</h3>
-                {v.transporter_name && <small style={{ color: "#64748b" }}>Owner: {v.transporter_name}</small>}
-                <div className="vehicle-rate" style={{ marginTop: 8 }}>₹{v.rate_per_km}/km</div>
-                <div className="card-actions">
-                  <Link to={`/book?vehicle=${encodeURIComponent(v.vehicle_type || "")}`} className="button button-primary">Book now <ArrowRight size={15} /></Link>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+        ))}
+      </div>
     </main>
   );
 }
 
 function BookingPage({ vehicles = [], user }) {
-  const safe = Array.isArray(vehicles) ? vehicles : [];
+  const [form, setForm] = useState({ vehicle_id: vehicles[0]?.id || "", pickup_city: "Mehsana", delivery_city: "Ahmedabad", approximate_km: 70 });
   const nav = useNavigate();
-
-  const [form, setForm] = useState({
-    vehicle_type: "",
-    vehicle_id: "",
-    pickup_date: new Date().toISOString().slice(0, 10),
-    pickup_time: "09:00",
-    pickup_city: "Mehsana",
-    delivery_city: "Ahmedabad",
-    approximate_km: 75,
-    customer_name: user?.name || "",
-    mobile: user?.phone || "",
-    email: user?.email || ""
-  });
-
-  useEffect(() => {
-    if (safe.length > 0 && !form.vehicle_id) {
-      setForm((prev) => ({
-        ...prev,
-        vehicle_id: safe[0].id,
-        vehicle_type: safe[0].vehicle_type,
-        customer_name: user?.name || prev.customer_name,
-        mobile: user?.phone || prev.mobile,
-        email: user?.email || prev.email
-      }));
-    }
-  }, [safe, user, form.vehicle_id]);
-
-  const selectedVeh = safe.find((v) => v.id === form.vehicle_id) || safe[0] || {};
-  const est = Math.max(Number(selectedVeh.minimum_fare || 0), Number(selectedVeh.rate_per_km || 0) * Number(form.approximate_km || 0));
+  const selectedVeh = vehicles.find((v) => v.id === form.vehicle_id) || vehicles[0] || {};
+  const est = Math.max(Number(selectedVeh.minimum_fare || 1500), Number(selectedVeh.rate_per_km || 25) * Number(form.approximate_km || 70));
 
   const handleBooking = async (e) => {
     e.preventDefault();
-    if (!user) {
-      toast.error("Please login to place a booking");
-      nav("/login");
-      return;
-    }
+    if (!user) { toast.error("Please login first"); nav("/login"); return; }
     try {
-      await api.post("/bookings", {
-        ...form,
-        vehicle_id: form.vehicle_id || selectedVeh.id || "",
-        vehicle_type: form.vehicle_type || selectedVeh.vehicle_type || "",
-        customer_name: form.customer_name || user.name,
-        email: form.email || user.email,
-        mobile: form.mobile || user.phone,
-        estimated_total: est
-      });
-      toast.success("Booking placed successfully!");
+      await api.post("/bookings", { ...form, vehicle_type: selectedVeh.vehicle_type, estimated_total: est });
+      toast.success("Order Placed! Waiting for Admin Payment Approval.");
       nav("/customer-dashboard");
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to place booking");
-    }
+    } catch { toast.error("Booking failed"); }
   };
 
   return (
-    <main className="page" style={{ maxWidth: 800, margin: "0 auto" }}>
-      <h2>Book Transport Dispatch</h2>
-      <form onSubmit={handleBooking} style={{ background: "#fff", padding: 24, borderRadius: 8, marginTop: 16, border: "1px solid #e2e8f0" }}>
-        <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div className="field">
-            <label>SELECT VEHICLE</label>
-            <select
-              value={form.vehicle_id}
-              onChange={(e) => {
-                const v = safe.find((x) => x.id === e.target.value);
-                setForm({ ...form, vehicle_id: e.target.value, vehicle_type: v?.vehicle_type || "" });
-              }}
-            >
-              {safe.map((v) => (
-                <option key={v.id} value={v.id}>{v.vehicle_type} - ₹{v.rate_per_km}/km ({v.transporter_name || "Fleet"})</option>
-              ))}
-            </select>
-          </div>
-          <div className="field"><label>PICKUP DATE</label><input type="date" value={form.pickup_date} onChange={(e) => setForm({ ...form, pickup_date: e.target.value })} required /></div>
-          <div className="field"><label>PICKUP CITY</label><input value={form.pickup_city} onChange={(e) => setForm({ ...form, pickup_city: e.target.value })} required /></div>
-          <div className="field"><label>DELIVERY CITY</label><input value={form.delivery_city} onChange={(e) => setForm({ ...form, delivery_city: e.target.value })} required /></div>
-          <div className="field"><label>APPROX DISTANCE (KM)</label><input type="number" value={form.approximate_km} onChange={(e) => setForm({ ...form, approximate_km: Number(e.target.value) })} required /></div>
-          <div className="field"><label>ESTIMATED FARE</label><input value={money(est)} disabled style={{ fontWeight: "bold", background: "#f1f5f9" }} /></div>
+    <main className="page" style={{ maxWidth: 700, margin: "0 auto", padding: "20px 5%" }}>
+      <h2>Confirm Vehicle Dispatch</h2>
+      <form onSubmit={handleBooking} style={{ background: "#fff", padding: 24, borderRadius: 12, marginTop: 16, border: "1px solid #e2e8f0" }}>
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>VEHICLE</label>
+          <select value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })}>
+            {vehicles.map((v) => <option key={v.id} value={v.id}>{v.vehicle_type} (₹{v.rate_per_km}/km) - {v.transporter_name}</option>)}
+          </select>
         </div>
-        <button type="submit" className="button button-primary" style={{ marginTop: 20, width: "100%", justifyContent: "center" }}>Confirm Booking</button>
+        <div className="field" style={{ marginBottom: 12 }}><label>FROM CITY</label><input value={form.pickup_city} onChange={(e) => setForm({ ...form, pickup_city: e.target.value })} required /></div>
+        <div className="field" style={{ marginBottom: 12 }}><label>TO CITY</label><input value={form.delivery_city} onChange={(e) => setForm({ ...form, delivery_city: e.target.value })} required /></div>
+        <div className="field" style={{ marginBottom: 16 }}><label>TOTAL ESTIMATE</label><input value={money(est)} disabled style={{ fontWeight: "bold", background: "#f8fafc" }} /></div>
+        <button type="submit" className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>Send Booking Request</button>
       </form>
+    </main>
+  );
+}
+
+function About() {
+  return (
+    <main className="page" style={{ maxWidth: 900, margin: "0 auto", padding: "40px 5%" }}>
+      <h1>About Sachin Logistics</h1>
+      <p style={{ marginTop: 16, fontSize: 16, color: "#475569" }}>
+        Sachin Logistics is Gujarat’s premier technology-driven open logistics network. We bridge the gap between verified commercial vehicle owners and industrial/agricultural cargo customers.
+      </p>
+    </main>
+  );
+}
+
+function Contact() {
+  return (
+    <main className="page" style={{ maxWidth: 700, margin: "0 auto", padding: "40px 5%" }}>
+      <h1>Contact Us</h1>
+      <p style={{ marginTop: 8, color: "#64748b" }}>Direct Dispatch & Admin Helpline</p>
+      <div style={{ background: "#fff", padding: 24, borderRadius: 12, marginTop: 20, border: "1px solid #e2e8f0" }}>
+        <p><strong>Phone:</strong> +91 97255 06630</p>
+        <p style={{ marginTop: 8 }}><strong>Email:</strong> admin@transitroute.in</p>
+        <p style={{ marginTop: 8 }}><strong>Address:</strong> Ahmedabad - Mehsana Highway, Gujarat</p>
+      </div>
     </main>
   );
 }
@@ -478,33 +465,32 @@ function BookingPage({ vehicles = [], user }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [vehicles, setVehicles] = useState([]);
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("transit_token");
     if (token) {
-      api.get("/auth/me").then((r) => setUser(r.data)).catch(() => localStorage.removeItem("transit_token")).finally(() => setChecking(false));
-    } else {
-      setChecking(false);
+      api.get("/auth/me").then((r) => setUser(r.data)).catch(() => localStorage.removeItem("transit_token"));
     }
     api.get("/vehicles").then((r) => { if (Array.isArray(r.data)) setVehicles(r.data); }).catch(() => {});
   }, []);
-
-  if (checking) return <div className="loading-screen">Loading platform…</div>;
 
   return (
     <BrowserRouter>
       <Header user={user} setUser={setUser} />
       <Routes>
-        <Route path="/" element={<Home vehicles={vehicles} />} />
-        <Route path="/vehicles" element={<Home vehicles={vehicles} />} />
+        <Route path="/" element={<FleetSearchPage vehicles={vehicles} />} />
+        <Route path="/vehicles" element={<FleetSearchPage vehicles={vehicles} />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/services" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/book" element={<BookingPage vehicles={vehicles} user={user} />} />
         <Route path="/login" element={<Auth setUser={setUser} />} />
         <Route path="/customer-dashboard" element={user?.role === "customer" ? <CustomerDashboard user={user} /> : <Navigate to="/login" />} />
         <Route path="/transporter-dashboard" element={user?.role === "transporter" ? <TransporterDashboard user={user} /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={user?.role === "admin" ? <SuperAdminPanel user={user} /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={user?.role === "admin" ? <SuperAdminPanel /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      <Footer />
       <Toaster position="top-right" richColors />
     </BrowserRouter>
   );
