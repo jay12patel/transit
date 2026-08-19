@@ -6,7 +6,7 @@ import { Toaster, toast } from "sonner";
 import "@/App.css";
 /* eslint-disable react/no-unstable-nested-components, no-empty */
 
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:8000"}/api`;
+const API = `${process.env.REACT_APP_BACKEND_URL || "https://transit-1-l2b5.onrender.com"}/api`;
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const api = axios.create({ baseURL: API, withCredentials: true });
 
