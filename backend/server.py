@@ -191,9 +191,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sachin Logistics API", lifespan=lifespan)
 
+origins = [
+    "http://localhost:3000",
+    "https://transit-jade.vercel.app",
+    "https://transit-ops-jade.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://.*",
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
