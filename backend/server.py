@@ -65,9 +65,14 @@ async def current_user(request: Request):
     except Exception:
         raise HTTPException(401, "Session expired")
 
-async def admin_user(user=Depends(current_user)):
+async def admin_only(user=Depends(current_user)):
     if user.get("role") != "admin":
         raise HTTPException(403, "Admin access required")
+    return user
+
+async def transporter_or_admin(user=Depends(current_user)):
+    if user.get("role") not in ["transporter", "admin"]:
+        raise HTTPException(403, "Transporter or Admin access required")
     return user
 
 class Register(BaseModel):
@@ -75,6 +80,8 @@ class Register(BaseModel):
     email: EmailStr
     password: str
     phone: Optional[str] = ""
+    role: str = "customer"
+    company_name: Optional[str] = ""
 
 class Login(BaseModel):
     email: EmailStr
@@ -88,100 +95,53 @@ class VehicleIn(BaseModel):
     vehicle_type: str
     vehicle_number: str = ""
     capacity: str
-    size: str
+    size: str = ""
     rate_per_km: float = 0
     minimum_fare: float = 0
     status: str = "Available"
-    photo: str = ""
-
-class DriverIn(BaseModel):
-    name: str
-    mobile: str
-    licence: str = ""
-    assigned_vehicle: str = ""
-    status: str = "Available"
 
 class BookingIn(BaseModel):
-    customer_name: str
-    mobile: str
-    email: EmailStr
-    company_name: str = ""
-    vehicle_type: str
-    vehicle_id: str = ""
-    pickup_date: str
-    pickup_time: str
-    pickup_address: str
-    pickup_city: str
-    delivery_address: str
-    delivery_city: str
-    approximate_km: float = 0
-    goods_type: str = ""
-    weight: str = ""
-    instructions: str = ""
-    trip_type: str = "One Way"
-    payment_method: str = "Pay Later"
-    loading_charge: float = 0
-    waiting_charge: float = 0
-    other_charges: float = 0
-    gst: float = 0
-    estimated_total: float = 0
+    customer_name: Optional[str] = ""
+    mobile: Optional[str] = ""
+    email: Optional[str] = ""
+    company_name: Optional[str] = ""
+    vehicle_type: Optional[str] = ""
+    vehicle_id: Optional[str] = ""
+    pickup_date: Optional[str] = ""
+    pickup_time: Optional[str] = "09:00"
+    pickup_address: Optional[str] = ""
+    pickup_city: Optional[str] = ""
+    delivery_address: Optional[str] = ""
+    delivery_city: Optional[str] = ""
+    approximate_km: Optional[float] = 0
+    goods_type: Optional[str] = ""
+    weight: Optional[str] = ""
+    instructions: Optional[str] = ""
+    trip_type: Optional[str] = "One Way"
+    payment_method: Optional[str] = "Pay Later"
+    loading_charge: Optional[float] = 0
+    waiting_charge: Optional[float] = 0
+    other_charges: Optional[float] = 0
+    gst: Optional[float] = 0
+    estimated_total: Optional[float] = 0
 
 class StatusIn(BaseModel):
     status: str
 
-class AssignmentIn(BaseModel):
-    vehicle_id: str = ""
-    driver_id: str = ""
-
 async def seed_data():
     await db.users.create_index("email", unique=True)
-    await db.bookings.create_index([("vehicle_id", 1), ("pickup_date", 1), ("pickup_time", 1)])
-    
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
-            "name": "TransitRoute Admin",
+            "name": "Super Admin (Owner)",
             "email": ADMIN_EMAIL,
             "password_hash": hash_password(ADMIN_PASSWORD),
             "role": "admin",
+            "phone": "9725506630",
+            "company_name": "Sachin Logistics Platform",
             "created_at": now()
         })
-        
-    if await db.users.count_documents({"role": "customer"}) == 0:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "name": "Demo Customer",
-            "email": "customer@example.com",
-            "password_hash": hash_password("Customer@2026!"),
-            "role": "customer",
-            "phone": "9876543210",
-            "created_at": now()
-        })
-        
-    if await db.vehicles.count_documents({}) == 0:
-        seeds = [
-            ("Tata Ace / Tenkor", "GJ-02-AC-2046", "750 kg", "7 × 4 ft", 18, 900, "Available"),
-            ("Loading Tempo", "GJ-02-LT-1188", "1.5 ton", "10 × 5 ft", 24, 1400, "Available"),
-            ("Loading Truck", "GJ-02-LK-9302", "5 ton", "17 × 7 ft", 32, 2800, "On Trip"),
-            ("20 FT Container", "GJ-02-CN-2020", "15 ton", "20 × 8 ft", 48, 5200, "Available"),
-            ("30 FT Container", "GJ-02-CN-3030", "20 ton", "30 × 8 ft", 58, 6800, "Maintenance"),
-            ("Refrigerated Van", "GJ-02-RV-7711", "2 ton", "14 × 6 ft", 38, 3200, "Available")
-        ]
-        await db.vehicles.insert_many([
-            {
-                "id": str(uuid.uuid4()),
-                "vehicle_type": a,
-                "vehicle_number": b,
-                "capacity": c,
-                "size": d,
-                "rate_per_km": e,
-                "minimum_fare": f,
-                "status": g,
-                "photo": "",
-                "created_at": now()
-            } for a, b, c, d, e, f, g in seeds
-        ])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -189,7 +149,7 @@ async def lifespan(app: FastAPI):
     yield
     client.close()
 
-app = FastAPI(title="Sachin Logistics API", lifespan=lifespan)
+app = FastAPI(title="Logistics Platform API", lifespan=lifespan)
 
 origins = [
     "http://localhost:3000",
@@ -209,20 +169,23 @@ api = APIRouter(prefix="/api")
 
 @api.get("/")
 async def root():
-    return {"message": "Sachin Logistics API is Online"}
+    return {"message": "Logistics Marketplace API is Online"}
 
 @api.post("/auth/register")
 async def register(data: Register, response: Response):
     email = data.email.lower()
     if await db.users.find_one({"email": email}):
-        raise HTTPException(409, "An account with this email already exists")
+        raise HTTPException(409, "Email already registered")
+    
+    role = "transporter" if data.role == "transporter" else "customer"
     user = {
         "id": str(uuid.uuid4()),
         "name": data.name,
         "email": email,
         "phone": data.phone,
+        "company_name": data.company_name,
         "password_hash": hash_password(data.password),
-        "role": "customer",
+        "role": role,
         "created_at": now()
     }
     await db.users.insert_one(user)
@@ -237,22 +200,11 @@ async def login(data: Login, response: Response):
     user = await db.users.find_one({"email": data.email.lower()})
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(401, "Email or password is incorrect")
-        
     t = token(user)
     public = {k: v for k, v in clean(user).items() if k != "password_hash"}
     public["token"] = t
     response.set_cookie(key="access_token", value=t, httponly=True, samesite="none", secure=True, path="/", max_age=86400)
     return public
-
-@api.post("/auth/change-password")
-async def change_password(data: PasswordChangeIn, user=Depends(current_user)):
-    db_user = await db.users.find_one({"id": user["id"]})
-    if not db_user or not verify_password(data.old_password, db_user["password_hash"]):
-        raise HTTPException(400, "Old password is incorrect")
-    
-    new_hash = hash_password(data.new_password)
-    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
-    return {"ok": True, "message": "Password changed successfully"}
 
 @api.post("/auth/logout")
 async def logout(response: Response):
@@ -263,130 +215,88 @@ async def logout(response: Response):
 async def me(user=Depends(current_user)):
     return user
 
-@api.get("/customer/bookings")
-async def customer_bookings(user=Depends(current_user)):
-    return await db.bookings.find({"email": user["email"].lower()}, {"_id": 0}).sort("created_at", -1).to_list(100)
-
 @api.get("/vehicles")
-async def vehicles():
-    return await db.vehicles.find({}, {"_id": 0}).sort("vehicle_type", 1).to_list(100)
+async def get_all_vehicles():
+    return await db.vehicles.find({}, {"_id": 0}).sort("vehicle_type", 1).to_list(200)
+
+@api.get("/transporter/vehicles")
+async def transporter_vehicles(user=Depends(transporter_or_admin)):
+    if user["role"] == "admin":
+        return await db.vehicles.find({}, {"_id": 0}).to_list(200)
+    return await db.vehicles.find({"transporter_id": user["id"]}, {"_id": 0}).to_list(200)
 
 @api.post("/vehicles")
-async def add_vehicle(data: VehicleIn, user=Depends(admin_user)):
+async def add_vehicle(data: VehicleIn, user=Depends(transporter_or_admin)):
     doc = data.model_dump()
-    doc.update({"id": str(uuid.uuid4()), "created_at": now()})
+    doc.update({
+        "id": str(uuid.uuid4()),
+        "transporter_id": user["id"],
+        "transporter_name": user.get("company_name") or user.get("name"),
+        "created_at": now()
+    })
     await db.vehicles.insert_one(doc)
     return clean(doc)
 
-@api.put("/vehicles/{vehicle_id}")
-async def edit_vehicle(vehicle_id: str, data: VehicleIn, user=Depends(admin_user)):
-    await db.vehicles.update_one({"id": vehicle_id}, {"$set": data.model_dump()})
-    return clean(await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0}))
-
 @api.delete("/vehicles/{vehicle_id}")
-async def delete_vehicle(vehicle_id: str, user=Depends(admin_user)):
-    await db.vehicles.delete_one({"id": vehicle_id})
+async def delete_vehicle(vehicle_id: str, user=Depends(transporter_or_admin)):
+    query = {"id": vehicle_id} if user["role"] == "admin" else {"id": vehicle_id, "transporter_id": user["id"]}
+    await db.vehicles.delete_one(query)
     return {"ok": True}
 
-@api.get("/drivers")
-async def drivers(user=Depends(admin_user)):
-    return await db.drivers.find({}, {"_id": 0}).to_list(100)
-
-@api.post("/drivers")
-async def add_driver(data: DriverIn, user=Depends(admin_user)):
+@api.post("/bookings")
+async def create_booking(data: BookingIn, user=Depends(current_user)):
+    target_veh = None
+    if data.vehicle_id:
+        target_veh = await db.vehicles.find_one({"id": data.vehicle_id})
+    
+    transporter_id = target_veh.get("transporter_id", "") if target_veh else ""
+    vehicle_type = data.vehicle_type or (target_veh.get("vehicle_type", "") if target_veh else "Commercial Vehicle")
+    
+    count = await db.bookings.count_documents({}) + 1
+    bid = f"TRN-{datetime.now().year}-{count:05d}"
     doc = data.model_dump()
-    doc.update({"id": str(uuid.uuid4()), "created_at": now()})
-    await db.drivers.insert_one(doc)
+    doc.update({
+        "id": str(uuid.uuid4()),
+        "booking_id": bid,
+        "customer_id": user["id"],
+        "customer_name": data.customer_name or user.get("name", "Customer"),
+        "email": user.get("email", data.email or ""),
+        "mobile": data.mobile or user.get("phone", ""),
+        "vehicle_type": vehicle_type,
+        "transporter_id": transporter_id,
+        "status": "Pending Confirmation",
+        "created_at": now()
+    })
+    await db.bookings.insert_one(doc)
     return clean(doc)
 
-@api.get("/availability")
-async def availability(date: str, vehicle_type: str = ""):
-    query = {"status": {"$in": ["Available", "Booked", "On Trip"]}}
-    if vehicle_type:
-        query["vehicle_type"] = vehicle_type
-    items = await db.vehicles.find(query, {"_id": 0}).to_list(100)
-    busy = await db.bookings.find(
-        {"pickup_date": date, "status": {"$in": ["Pending Confirmation", "Confirmed", "Running"]}},
-        {"_id": 0, "vehicle_id": 1}
-    ).to_list(100)
-    busy_ids = {x.get("vehicle_id") for x in busy}
-    return [{**v, "availability": "Booked" if v["id"] in busy_ids else v.get("status", "Available")} for v in items]
-
-async def create_notification(title, body, kind="booking"):
-    await db.notifications.insert_one({
-        "id": str(uuid.uuid4()),
-        "title": title,
-        "body": body,
-        "kind": kind,
-        "read": False,
-        "created_at": now(),
-        "delivery": "in-app",
-        "email_status": "MOCKED"
-    })
-
-@api.post("/bookings")
-async def create_booking(data: BookingIn):
-    async with LOCK:
-        if data.vehicle_id:
-            clash = await db.bookings.find_one({
-                "vehicle_id": data.vehicle_id,
-                "pickup_date": data.pickup_date,
-                "status": {"$in": ["Pending Confirmation", "Confirmed", "Running"]}
-            })
-            if clash:
-                raise HTTPException(409, "That vehicle is no longer available for this date")
-        count = await db.bookings.count_documents({}) + 1
-        bid = f"TRN-{datetime.now().year}-{count:05d}"
-        doc = data.model_dump()
-        doc.update({"id": str(uuid.uuid4()), "booking_id": bid, "email": data.email.lower(), "status": "Pending Confirmation", "payment_status": "Unpaid", "created_at": now()})
-        await db.bookings.insert_one(doc)
-        await create_notification("New booking received", f"{bid} from {data.customer_name} · {data.vehicle_type}")
-        return clean(doc)
-
-@api.get("/bookings/lookup/{booking_id}")
-async def lookup(booking_id: str):
-    doc = await db.bookings.find_one({"booking_id": booking_id.strip().upper()}, {"_id": 0})
-    if not doc:
-        raise HTTPException(404, "Booking ID not found")
-    return doc
-
 @api.get("/bookings")
-async def all_bookings(user=Depends(admin_user)):
-    return await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def get_bookings(user=Depends(current_user)):
+    if user["role"] == "admin":
+        return await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    elif user["role"] == "transporter":
+        return await db.bookings.find({"$or": [{"transporter_id": user["id"]}, {"transporter_id": ""}]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    else:
+        return await db.bookings.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 @api.patch("/bookings/{booking_id}/status")
-async def booking_status(booking_id: str, data: StatusIn, user=Depends(admin_user)):
-    result = await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"status": data.status, "updated_at": now()}})
-    if not result.matched_count:
-        raise HTTPException(404, "Booking not found")
-    await create_notification(f"Booking {data.status.lower()}", f"{booking_id} is now {data.status}")
-    return await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+async def update_booking_status(booking_id: str, data: StatusIn, user=Depends(transporter_or_admin)):
+    await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"status": data.status, "updated_at": now()}})
+    return {"ok": True}
 
-@api.patch("/bookings/{booking_id}/assignment")
-async def assignment(booking_id: str, data: AssignmentIn, user=Depends(admin_user)):
-    await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"vehicle_id": data.vehicle_id, "driver_id": data.driver_id, "status": "Confirmed", "updated_at": now()}})
-    return await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
-
-@api.get("/dashboard")
-async def dashboard(user=Depends(admin_user)):
+@api.get("/admin/dashboard")
+async def admin_dashboard(user=Depends(admin_only)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
     bookings = await db.bookings.find({}, {"_id": 0}).to_list(500)
-    vehicles = await db.vehicles.find({}, {"_id": 0}).to_list(100)
-    def n(status):
-        return sum(1 for b in bookings if b.get("status") == status)
+    vehicles = await db.vehicles.find({}, {"_id": 0}).to_list(200)
+    
     return {
-        "today": sum(1 for b in bookings if b.get("pickup_date") == datetime.now().date().isoformat()),
-        "pending": n("Pending Confirmation"),
-        "confirmed": n("Confirmed"),
-        "running": n("Running"),
-        "completed": n("Completed"),
-        "cancelled": n("Cancelled"),
-        "available_vehicles": sum(1 for v in vehicles if v.get("status") == "Available"),
-        "booked_vehicles": sum(1 for v in vehicles if v.get("status") in ["Booked", "On Trip"]),
-        "revenue": sum(float(b.get("estimated_total", 0)) for b in bookings if b.get("status") == "Completed")
+        "total_users": len(users),
+        "total_transporters": sum(1 for u in users if u.get("role") == "transporter"),
+        "total_customers": sum(1 for u in users if u.get("role") == "customer"),
+        "total_bookings": len(bookings),
+        "total_vehicles": len(vehicles),
+        "users": users
     }
-
-@api.get("/notifications")
-async def notifications(user=Depends(admin_user)):
-    return await db.notifications.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
 
 app.include_router(api)
