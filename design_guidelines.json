@@ -1,0 +1,92 @@
+{
+  "project": "Transportation Vehicle Booking Website",
+  "context": "hybrid_fullstack",
+  "theme": "Light-first, with optional dark admin workspace",
+  "design_concepts": [
+    {"name": "Freight Ledger", "probability": 0.32, "description": "Swiss editorial booking experience fused with Indian wayfinding and industrial ledger details. Best balance of trust, clarity, and conversion."},
+    {"name": "Roadside Dispatch", "probability": 0.24, "description": "Tactical fleet operations language fused with roadside signage and documentary photography. Strongest for admin and availability views."},
+    {"name": "Material Route", "probability": 0.19, "description": "Warm paper, stamped labels, and map-grid geometry fused with modern SaaS form patterns. Most human and approachable for customers."},
+    {"name": "Container Index", "probability": 0.14, "description": "Editorial catalog fused with shipping manifests and modular Tetris layout. Strong product browsing and SEO storytelling."},
+    {"name": "Night Yard", "probability": 0.11, "description": "Dark, high-contrast dispatch console fused with reflective safety markings. Reserve for admin dashboards, not the customer booking funnel."}
+  ],
+  "discovery": {
+    "audience": ["Indian small and mid-size businesses", "warehouse and ecommerce operators", "household/commercial shippers", "dispatch staff and fleet admins"],
+    "primary_tasks": ["browse vehicle capacity and pricing", "check date/time availability", "enter pickup and delivery details", "receive booking ID", "look up booking status", "admin assignment and status control"],
+    "success_actions": ["start booking", "submit booking", "save contact details", "return to booking lookup", "admin assigns vehicle and driver"],
+    "emotion": "reassuring, capable, transparent, locally grounded",
+    "content_strategy": "Lead with a simple promise, then show vehicle fit, availability, price estimate, booking steps, and proof of operational control. Use Indian Rupee and dd/MM/yyyy with Asia/Kolkata timezone."
+  },
+  "research": [
+    {"reference": "Godly / logistics case studies", "descriptor": "Service-first information architecture, calculator-led conversion, route transparency, and modular service grids."},
+    {"reference": "Flexport and Ascent PEAK dashboard patterns", "descriptor": "Widget hierarchy, centralized allocation, filterable operational views, and clear KPI summaries."},
+    {"reference": "UX Patterns calendar / SaaSFrame calendar", "descriptor": "Month for broad comparison, week/agenda for operational detail, explicit selected and unavailable states, stable loading containers."}
+  ],
+  "typography": {
+    "headings": "Bebas Neue or Anton, 900 weight, tracking-tight; use only for high-impact display labels and H1/H2, never body copy.",
+    "body": "IBM Plex Sans, 400/500/600; highly legible for forms, tables, and Indian addresses.",
+    "mono": "IBM Plex Mono for booking IDs, vehicle codes, prices, and timestamps.",
+    "rules": ["H1 text-4xl sm:text-5xl lg:text-6xl maximum", "H2 text-2xl sm:text-3xl lg:text-4xl", "labels uppercase text-xs tracking-[0.2em]", "body leading-relaxed", "never use Inter, Roboto, Open Sans, or Lato for headings"]
+  },
+  "colors": {
+    "archetype": "Swiss & High-Contrast with warm industrial tint",
+    "background": "#F5F1E8 warm bone",
+    "surface": "#FFFDF8 paper white",
+    "foreground": "#18212A blue-charcoal",
+    "muted": "#69747B cool tinted grey",
+    "border": "#D6D0C4 warm stone",
+    "primary": "#C9472C signal vermilion",
+    "primary_foreground": "#FFFDF8",
+    "secondary": "#173F5F deep route blue",
+    "success": "#2F6B4F moss green",
+    "warning": "#B87518 ochre",
+    "danger": "#A83228",
+    "rules": ["95% UI remains bone, paper, blue-charcoal, and stone", "use vermilion only for primary CTAs and urgent status", "no teal green/blue dashboard palette", "no full-screen gradients", "never use pure #000000 or #808080", "verify normal text at 4.5:1 and large text at 3:1"]
+  },
+  "visual_enhancers": {
+    "texture": "Subtle CSS grain/noise overlay at low opacity, plus faint route-map linework; decorative layers aria-hidden=true.",
+    "surfaces": "Flat solid customer surfaces with 1px borders and nested 4px/8px radii. Admin uses cardless grid borders. No transparent content surfaces.",
+    "image_treatment": "If imagery is added, use real vehicle/loading scenes with warm documentary crop, max bg-black/40 overlay, and never obscure the vehicle.",
+    "decorative_language": ["small route ticks", "manifest stamps", "directional arrows", "capacity bars", "fine grid rules"],
+    "scrollbar": "Customize to slim warm-stone track and vermilion thumb; no scrollbar gutter."
+  },
+  "component_name": {
+    "customer": ["SiteHeader", "HeroQuotePanel", "VehicleCatalog", "VehicleFitRow", "AvailabilitySearch", "BookingStepper", "PriceEstimate", "BookingConfirmation", "BookingLookup", "ContactPanel"],
+    "admin": ["AdminShell", "KpiStrip", "BookingQueue", "BookingDetailDrawer", "AvailabilityTimeline", "VehicleCrudTable", "DriverCrudTable", "RevenueSummary", "NotificationInbox"],
+    "component_path": "/app/frontend/src/components/"
+  },
+  "grids": {
+    "marketing": "Tetris grid: grid-cols-1 md:grid-cols-8 lg:grid-cols-12, gap-8 lg:gap-12; mix full hero, 4-column vehicle tiles, tall availability panel, and empty offset cells.",
+    "dashboard": "High-density grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4; primary booking queue spans 2 columns and 2 rows, feed is tall narrow, KPI cells are single columns.",
+    "rules": ["grid children are direct children", "mobile-first", "align-items-start unless a panel must stretch", "do not fill every cell perfectly", "all bordered content gets p-6 or p-8"]
+  },
+  "layouts": {
+    "header": "Sticky solid paper or opaque backdrop-blur-xl bg-[#FFFDF8]/90 with border-b, z-50, desktop links Home, Vehicles, Vehicle Availability, Book Vehicle, My Booking, Contact Us, Login/Register, and primary Book a Vehicle CTA. Mobile uses Sheet menu.",
+    "home": "Left-aligned editorial hero with booking intent panel offset to the right on desktop; vehicle catalog follows as an asymmetrical grid; finish with process and dark contrast footer.",
+    "booking": "Four-step left-anchored flow: vehicle and schedule, route/trip, customer details, review/payment. Keep estimate visible as a sticky side rail on desktop and a bottom summary on mobile.",
+    "admin": "Desktop-only optimized shell with left rail, top context bar, KPI strip, booking queue, and assignment drawer. Tables remain dense but never clipped; horizontal scroll on small screens.",
+    "footer": "Deep route-blue contrast shift, py-20 or py-32, large brand wordmark plus contact and service links."
+  },
+  "motion": {
+    "entrance": "Stagger sections 60ms with opacity and translate-y; vehicle tiles reveal on scroll.",
+    "interaction": "Buttons use transform translate-y/-1 and background-color transitions; rows highlight on hover; selected vehicle gets crisp vermilion rule.",
+    "loading": "Skeletons retain final heights; availability uses pulsing route ticks.",
+    "reduced_motion": "Disable parallax, stagger, and decorative animation under prefers-reduced-motion; preserve state changes with color and borders.",
+    "rule": "Never use transition-all. Animate only transform, opacity, background-color, border-color, and box-shadow."
+  },
+  "accessibility": {
+    "requirements": ["Every button, link, input, menu, error, balance, confirmation, and key metric requires data-testid in kebab-case.", "Use visible focus:ring-2 ring-secondary with high-contrast offset.", "Never communicate availability by color alone; include Available, Held, or Booked text.", "Use labels and helper text for pickup/delivery, date/time, cargo, and payment.", "Use Shadcn Calendar, Select, Dialog, Sheet, Form, and Sonner; never native date/select for advanced interactions.", "Announce booking ID and confirmation status in an aria-live region.", "Use Indian locale formatting: en-IN, INR, Asia/Kolkata."]
+  },
+  "media": {
+    "image_urls": [],
+    "policy": "No images are required for the first implementation. If images are introduced, obtain them only through image_selector_tool; do not use placeholder URLs. Categories: hero vehicle, vehicle type detail, optional driver/team trust image.",
+    "responsive": "Images max-h-[80vh] md:max-h-none on mobile and object-cover with descriptive alt text."
+  },
+  "3d libraries": {"decision": "Do not use 3D for the first MVP; booking clarity beats immersion.", "future": ["React Three Fiber + Drei for optional vehicle configurator", "React Map GL for future route visualization", "Recharts/Shadcn charts for revenue and utilization"], "steps": ["lazy-load any future canvas", "wrap with Suspense", "provide loading and non-WebGL fallback", "keep background transparent only for decorative canvas"]},
+  "implementation": {
+    "file_type": "Use .js and .jsx files, not .tsx.",
+    "stack": "React, Tailwind, FastAPI, MongoDB, Shadcn primitives.",
+    "data_contract": ["booking IDs are human-readable and unique", "server validates vehicle availability and prevents overlapping bookings atomically", "booking history is append-only", "notifications are stored in-app with email-ready adapter mocked", "payment methods Pay Later, Cash, Bank Transfer; verified status is server-controlled", "seed vehicles are editable, never hardcoded only in UI"],
+    "future_ready": ["email adapter currently MOCKED", "WhatsApp/SMS adapter boundary", "Razorpay payment provider boundary", "maps/tracking/invoice/reporting service boundaries"]
+  },
+  "GENERAL UI UX DESIGN GUIDELINES": ["Do not center the entire app container or set App text-align center.", "Avoid generic centered layouts, SaaS gradients, excessive rounded cards, and uniform equal grids.", "Use 2-3x generous spacing and negative space.", "Use explicit hover, active, focus, selected, empty, error, and loading states.", "Headers must have opaque or blurred backgrounds; never complete transparent content surfaces.", "Use modern pill or sharp buttons with clear pressed feedback.", "Avoid AI assistant emoji characters as icons; use lucide-react or existing Shadcn icons.", "Prefer raw HTML/Tailwind for marketing structure and Shadcn for interactive app/admin controls.", "Use Sonner for toast notifications.", "Customize shadows and borders with warm or blue tint; no universal transition.", "Keep customer mobile-first and admin desktop-first while maintaining responsive fallbacks."]
+}
