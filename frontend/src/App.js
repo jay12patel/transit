@@ -3,7 +3,7 @@ import axios from "axios";
 import { BrowserRouter, Link, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, CircleUserRound, ClipboardList, Gauge, KeyRound, LogOut, MapPin, Menu, Phone, Plus, Route as RouteIcon, ShieldCheck, Trash2, Truck, UserRound, X } from "lucide-react";
 import { Toaster, toast } from "sonner";
-import "@/App.css";
+import "./App.css";
 /* eslint-disable react/no-unstable-nested-components, no-empty */
 
 const API = `${process.env.REACT_APP_BACKEND_URL || "https://transit-1-l2b5.onrender.com"}/api`;
@@ -130,6 +130,7 @@ function Status({ value }) {
 }
 
 function VehicleCard({ v }) {
+  if (!v) return null;
   return (
     <article className="vehicle-card">
       <div className="vehicle-visual">
@@ -145,7 +146,7 @@ function VehicleCard({ v }) {
         </div>
         <div className="vehicle-rate">₹{v.rate_per_km}/km <span>· transparent route pricing</span></div>
         <div className="card-actions">
-          <Link to={`/book?vehicle=${encodeURIComponent(v.vehicle_type)}`} className="button button-primary">
+          <Link to={`/book?vehicle=${encodeURIComponent(v.vehicle_type || "")}`} className="button button-primary">
             Book now <ArrowRight size={15} />
           </Link>
           <Link to="/availability" className="button button-quiet">
@@ -157,7 +158,8 @@ function VehicleCard({ v }) {
   );
 }
 
-function Home({ vehicles }) {
+function Home({ vehicles = [] }) {
+  const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
   return (
     <main>
       <section className="hero">
@@ -193,7 +195,7 @@ function Home({ vehicles }) {
           <Link to="/vehicles" className="arrow-link">View all vehicles <ArrowRight size={16} /></Link>
         </div>
         <div className="vehicle-grid">
-          {vehicles.length === 0 ? <p>No vehicles added yet by Admin.</p> : vehicles.slice(0, 3).map((v) => (
+          {safeVehicles.length === 0 ? <p>Loading fleet details...</p> : safeVehicles.slice(0, 3).map((v) => (
             <VehicleCard key={v.id || v.vehicle_type} v={v} />
           ))}
         </div>
@@ -212,36 +214,40 @@ function Home({ vehicles }) {
   );
 }
 
-function Vehicles({ vehicles }) {
+function Vehicles({ vehicles = [] }) {
+  const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
   return (
     <main className="page">
       <div className="page-intro">
-        <div><div className="eyebrow">ACTIVE FLEET / {vehicles.length} VEHICLES</div><h1>Sachin Logistics<br /><em>Fleet.</em></h1></div>
+        <div><div className="eyebrow">ACTIVE FLEET / {safeVehicles.length} VEHICLES</div><h1>Sachin Logistics<br /><em>Fleet.</em></h1></div>
         <p>Choose an available vehicle configured by our dispatch team for your specific load.</p>
       </div>
       <div className="vehicle-list">
-        {vehicles.length === 0 ? <p>No vehicles available currently.</p> : vehicles.map((v) => <VehicleCard key={v.id || v.vehicle_type} v={v} />)}
+        {safeVehicles.length === 0 ? <p>Loading fleet...</p> : safeVehicles.map((v) => <VehicleCard key={v.id || v.vehicle_type} v={v} />)}
       </div>
     </main>
   );
 }
 
-function Availability({ vehicles }) {
+function Availability({ vehicles = [] }) {
+  const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [items, setItems] = useState(vehicles);
+  const [items, setItems] = useState(safeVehicles);
 
   const check = async () => {
     try {
       const res = await api.get(`/availability?date=${date}`);
-      setItems(res.data);
+      if (Array.isArray(res.data)) setItems(res.data);
     } catch {
       toast.error("Availability check failed");
     }
   };
 
   useEffect(() => {
-    setItems(vehicles);
+    if (Array.isArray(vehicles)) setItems(vehicles);
   }, [vehicles]);
+
+  const safeItems = Array.isArray(items) ? items : [];
 
   return (
     <main className="page">
@@ -258,12 +264,12 @@ function Availability({ vehicles }) {
         </button>
       </section>
       <div className="availability-grid" style={{ marginTop: 24 }}>
-        {items.map((v) => (
+        {safeItems.length === 0 ? <p>Checking fleet availability...</p> : safeItems.map((v) => (
           <div className="availability-row" key={v.id || v.vehicle_type}>
             <div className="availability-icon"><Truck size={25} /></div>
             <div><strong>{v.vehicle_type}</strong><small>{v.capacity} · {v.size} ({v.vehicle_number || "Open Fleet"})</small></div>
             <Status value={v.availability || v.status} />
-            <Link to={`/book?vehicle=${encodeURIComponent(v.vehicle_type)}`} className="button button-quiet">
+            <Link to={`/book?vehicle=${encodeURIComponent(v.vehicle_type || "")}`} className="button button-quiet">
               Select <ArrowRight size={15} />
             </Link>
           </div>
@@ -273,13 +279,14 @@ function Availability({ vehicles }) {
   );
 }
 
-function Booking({ vehicles, user }) {
+function Booking({ vehicles = [], user }) {
+  const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
   const params = new URLSearchParams(window.location.search);
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(null);
   const [form, setForm] = useState({
-    vehicle_type: params.get("vehicle") || vehicles[0]?.vehicle_type || "",
-    vehicle_id: vehicles.find((v) => v.vehicle_type === params.get("vehicle"))?.id || vehicles[0]?.id || "",
+    vehicle_type: params.get("vehicle") || safeVehicles[0]?.vehicle_type || "",
+    vehicle_id: safeVehicles.find((v) => v.vehicle_type === params.get("vehicle"))?.id || safeVehicles[0]?.id || "",
     pickup_date: new Date().toISOString().slice(0, 10),
     pickup_time: "09:00",
     trip_type: "One Way",
@@ -302,13 +309,23 @@ function Booking({ vehicles, user }) {
     instructions: ""
   });
 
+  useEffect(() => {
+    if (safeVehicles.length > 0 && !form.vehicle_type) {
+      setForm((prev) => ({
+        ...prev,
+        vehicle_type: params.get("vehicle") || safeVehicles[0].vehicle_type,
+        vehicle_id: safeVehicles.find((v) => v.vehicle_type === params.get("vehicle"))?.id || safeVehicles[0].id
+      }));
+    }
+  }, [safeVehicles, params]);
+
   const set = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
-  const vehicle = vehicles.find((v) => v.vehicle_type === form.vehicle_type) || vehicles[0] || {};
+  const vehicle = safeVehicles.find((v) => v.vehicle_type === form.vehicle_type) || safeVehicles[0] || {};
   const estimate = Math.max(Number(vehicle.minimum_fare || 0), Number(vehicle.rate_per_km || 0) * Number(form.approximate_km || 0)) + Number(form.loading_charge || 0) + Number(form.waiting_charge || 0) + Number(form.other_charges || 0);
 
   const submit = async () => {
     try {
-      const res = await api.post("/bookings", { ...form, vehicle_id: vehicle.id, estimated_total: estimate });
+      const res = await api.post("/bookings", { ...form, vehicle_id: vehicle.id || "", estimated_total: estimate });
       setSubmitted(res.data);
       toast.success("Booking placed successfully!");
     } catch (e) {
@@ -350,7 +367,7 @@ function Booking({ vehicles, user }) {
     );
   }
 
-  const Field = ({ label, k, type = "text", placeholder }) => (
+  const FormField = ({ label, k, type = "text", placeholder }) => (
     <div className="field">
       <label>{label}</label>
       <input type={type} placeholder={placeholder} value={form[k]} onChange={(e) => set(k, e.target.value)} />
@@ -371,10 +388,10 @@ function Booking({ vehicles, user }) {
                 <div className="field">
                   <label>SELECT VEHICLE</label>
                   <select value={form.vehicle_type} onChange={(e) => {
-                    const sel = vehicles.find((v) => v.vehicle_type === e.target.value);
+                    const sel = safeVehicles.find((v) => v.vehicle_type === e.target.value);
                     setForm((prev) => ({ ...prev, vehicle_type: e.target.value, vehicle_id: sel?.id || "" }));
                   }}>
-                    {vehicles.map((v) => <option key={v.id || v.vehicle_type} value={v.vehicle_type}>{v.vehicle_type} (₹{v.rate_per_km}/km)</option>)}
+                    {safeVehicles.map((v) => <option key={v.id || v.vehicle_type} value={v.vehicle_type}>{v.vehicle_type} (₹{v.rate_per_km}/km)</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -384,12 +401,12 @@ function Booking({ vehicles, user }) {
                     <option>Round Trip</option>
                   </select>
                 </div>
-                <Field label="PICKUP DATE" k="pickup_date" type="date" />
-                <Field label="PICKUP TIME" k="pickup_time" type="time" />
-                <Field label="PICKUP CITY" k="pickup_city" placeholder="e.g. Mehsana" />
-                <Field label="DELIVERY CITY" k="delivery_city" placeholder="e.g. Ahmedabad / Surat" />
-                <Field label="APPROX. KM" k="approximate_km" type="number" />
-                <Field label="GOODS TYPE" k="goods_type" placeholder="e.g. Industrial / Commercial Goods" />
+                <FormField label="PICKUP DATE" k="pickup_date" type="date" />
+                <FormField label="PICKUP TIME" k="pickup_time" type="time" />
+                <FormField label="PICKUP CITY" k="pickup_city" placeholder="e.g. Mehsana" />
+                <FormField label="DELIVERY CITY" k="delivery_city" placeholder="e.g. Ahmedabad / Surat" />
+                <FormField label="APPROX. KM" k="approximate_km" type="number" />
+                <FormField label="GOODS TYPE" k="goods_type" placeholder="e.g. Industrial / Commercial Goods" />
               </div>
             </>
           )}
@@ -397,10 +414,10 @@ function Booking({ vehicles, user }) {
             <>
               <h2>Contact Details</h2>
               <div className="form-grid">
-                <Field label="CUSTOMER NAME" k="customer_name" />
-                <Field label="MOBILE NUMBER" k="mobile" />
-                <Field label="EMAIL" k="email" type="email" />
-                <Field label="COMPANY NAME" k="company_name" />
+                <FormField label="CUSTOMER NAME" k="customer_name" />
+                <FormField label="MOBILE NUMBER" k="mobile" />
+                <FormField label="EMAIL" k="email" type="email" />
+                <FormField label="COMPANY NAME" k="company_name" />
               </div>
             </>
           )}
@@ -443,7 +460,7 @@ function CustomerDashboard({ user }) {
   const load = useCallback(async () => {
     try {
       const res = await api.get("/customer/bookings");
-      setBookings(res.data);
+      if (Array.isArray(res.data)) setBookings(res.data);
     } catch {}
   }, []);
 
@@ -461,6 +478,8 @@ function CustomerDashboard({ user }) {
       toast.error(err.response?.data?.detail || "Failed to change password");
     }
   };
+
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
 
   return (
     <main className="page" style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -493,8 +512,8 @@ function CustomerDashboard({ user }) {
 
       {tab === "My Bookings" && (
         <div>
-          <h2>Your Orders ({bookings.length})</h2>
-          {bookings.length === 0 ? (
+          <h2>Your Orders ({safeBookings.length})</h2>
+          {safeBookings.length === 0 ? (
             <div style={{ padding: 30, textAlign: "center", background: "#f8f9fa", borderRadius: 8, marginTop: 12 }}>
               <p>You haven't placed any bookings yet.</p>
               <Link to="/book" className="button button-primary" style={{ marginTop: 12, display: "inline-flex" }}>Book a Vehicle</Link>
@@ -509,7 +528,7 @@ function CustomerDashboard({ user }) {
                 <span>Total Amount</span>
                 <span>Status</span>
               </div>
-              {bookings.map((b) => (
+              {safeBookings.map((b) => (
                 <div className="table-row" key={b.id || b.booking_id}>
                   <span className="mono"><b>{b.booking_id}</b></span>
                   <span>{b.pickup_city} → {b.delivery_city}</span>
@@ -673,10 +692,12 @@ function Admin({ user, setUser, onFleetUpdate }) {
   const load = useCallback(async () => {
     try {
       const [s, b, v] = await Promise.all([api.get("/dashboard"), api.get("/bookings"), api.get("/vehicles")]);
-      setStats(s.data);
-      setBookings(b.data);
-      setVehicles(v.data);
-      if (onFleetUpdate) onFleetUpdate(v.data);
+      setStats(s.data || {});
+      if (Array.isArray(b.data)) setBookings(b.data);
+      if (Array.isArray(v.data)) {
+        setVehicles(v.data);
+        if (onFleetUpdate) onFleetUpdate(v.data);
+      }
     } catch {}
   }, [onFleetUpdate]);
 
@@ -734,6 +755,9 @@ function Admin({ user, setUser, onFleetUpdate }) {
       toast.error(err.response?.data?.detail || "Failed to change password");
     }
   };
+
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+  const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
 
   return (
     <main className="admin-page">
@@ -802,8 +826,8 @@ function Admin({ user, setUser, onFleetUpdate }) {
                 <span>Status</span>
                 <span>Action</span>
               </div>
-              {bookings.length === 0 && <div className="empty-row">No orders received yet.</div>}
-              {bookings.map((b) => (
+              {safeBookings.length === 0 && <div className="empty-row">No orders received yet.</div>}
+              {safeBookings.map((b) => (
                 <div className="table-row" key={b.id || b.booking_id}>
                   <span className="mono"><b>{b.booking_id}</b><small>{b.pickup_date}</small></span>
                   <span><b>{b.customer_name}</b><small>{b.pickup_city} → {b.delivery_city}</small></span>
@@ -868,7 +892,7 @@ function Admin({ user, setUser, onFleetUpdate }) {
             </form>
 
             <div className="admin-section-heading">
-              <h2>Configured Fleet ({vehicles.length})</h2>
+              <h2>Configured Fleet ({safeVehicles.length})</h2>
             </div>
             <div className="booking-table">
               <div className="table-head">
@@ -879,7 +903,7 @@ function Admin({ user, setUser, onFleetUpdate }) {
                 <span>Status</span>
                 <span>Action</span>
               </div>
-              {vehicles.map((v) => (
+              {safeVehicles.map((v) => (
                 <div className="table-row" key={v.id}>
                   <span><b>{v.vehicle_type}</b><small>{v.vehicle_number || "Open"}</small></span>
                   <span>{v.capacity} · {v.size}</span>
@@ -937,7 +961,9 @@ function App() {
 
   const loadVehicles = useCallback(() => {
     api.get("/vehicles")
-      .then((r) => setVehicles(r.data))
+      .then((r) => {
+        if (Array.isArray(r.data)) setVehicles(r.data);
+      })
       .catch(() => {});
   }, []);
 
