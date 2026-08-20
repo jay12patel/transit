@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from pathlib import Path
-import os
+import os, random
 
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv()
@@ -12,12 +12,12 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-import uuid, logging, bcrypt, jwt, asyncio
+import uuid, logging, bcrypt, jwt
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "transitroute")
 JWT_SECRET = os.environ.get("JWT_SECRET", "super_secret_jwt_transitroute_2026_secure_key_32bytes")
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@transitroute.in")
+ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "9725506630")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Transit@2026!")
 
 client = AsyncIOMotorClient(MONGO_URL)
@@ -40,7 +40,7 @@ def generate_token(user: dict) -> str:
     payload = {
         "sub": str(user["id"]),
         "role": str(user.get("role", "customer")),
-        "mobile": str(user.get("phone", "")),
+        "phone": str(user.get("phone", "")),
         "exp": datetime.now(timezone.utc).timestamp() + 86400 * 30
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -79,13 +79,20 @@ async def transporter_or_admin(user=Depends(current_user)):
         raise HTTPException(403, "Transporter access required")
     return user
 
-class AuthPayload(BaseModel):
+class SendOtpIn(BaseModel):
     phone: str
-    password: str
+
+class VerifyOtpIn(BaseModel):
+    phone: str
+    otp: str
     name: Optional[str] = ""
-    email: Optional[str] = ""
     role: Optional[str] = "customer"
     company_name: Optional[str] = ""
+
+class LoginIn(BaseModel):
+    phone: str
+    password: Optional[str] = None
+    otp: Optional[str] = None
 
 class VehicleIn(BaseModel):
     vehicle_type: str
@@ -100,8 +107,8 @@ class VehicleIn(BaseModel):
 class BookingIn(BaseModel):
     customer_name: Optional[str] = ""
     mobile: Optional[str] = ""
+    vehicle_id: str
     vehicle_type: Optional[str] = ""
-    vehicle_id: Optional[str] = ""
     pickup_date: Optional[str] = ""
     pickup_time: Optional[str] = "09:00"
     pickup_city: Optional[str] = ""
@@ -111,8 +118,7 @@ class BookingIn(BaseModel):
     estimated_total: Optional[float] = 0
 
 class PaymentApproveIn(BaseModel):
-    payment_status: str # "Approved" / "Rejected"
-    booking_status: Optional[str] = "Confirmed"
+    payment_status: str
 
 async def seed_data():
     try:
@@ -122,11 +128,12 @@ async def seed_data():
             await db.users.insert_one({
                 "id": str(uuid.uuid4()),
                 "name": "Super Admin (Owner)",
-                "phone": "9725506630",
-                "email": ADMIN_EMAIL.lower(),
+                "phone": ADMIN_PHONE,
+                "email": "admin@transitroute.in",
                 "password_hash": hash_password(ADMIN_PASSWORD),
                 "role": "admin",
-                "company_name": "Platform Management",
+                "company_name": "Sachin Logistics Head",
+                "verified": True,
                 "created_at": now()
             })
     except Exception as e:
@@ -155,59 +162,74 @@ api = APIRouter(prefix="/api")
 async def root():
     return {"status": "ok", "message": "Sachin Logistics API is Online"}
 
-@api.post("/auth/register")
-async def register(data: AuthPayload):
+# OTP Endpoints
+@api.post("/auth/send-otp")
+async def send_otp(data: SendOtpIn):
     phone = data.phone.strip().replace(" ", "").replace("+91", "")
     if len(phone) < 10:
-        raise HTTPException(400, "માન્ય ૧૦ આંકડાનો મોબાઇલ નંબર દાખલ કરો")
-        
-    if await db.users.find_one({"phone": phone}):
-        raise HTTPException(400, "આ મોબાઇલ નંબર પર પહેલેથી એકાઉન્ટ છે. Login કરો.")
+        raise HTTPException(400, "માન્ય ૧૦ આંકડાનો મોબાઇલ નંબર નાખો")
     
-    role = "transporter" if data.role == "transporter" else "customer"
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "name": data.name.strip() or "User",
-        "phone": phone,
-        "email": data.email.strip().lower(),
-        "company_name": data.company_name.strip(),
-        "password_hash": hash_password(data.password),
-        "role": role,
-        "created_at": now()
-    }
-    await db.users.insert_one(user_doc)
-    t = generate_token(user_doc)
+    # 4-Digit OTP Generate (For Demo / Production default 1234 or random)
+    otp = str(random.randint(1000, 9999))
+    # In live system without SMS gateway, we also return demo_otp for instant test
+    await db.otps.update_one({"phone": phone}, {"$set": {"otp": otp, "created_at": now()}}, upsert=True)
     
-    return {
-        "id": user_id,
-        "name": user_doc["name"],
-        "phone": user_doc["phone"],
-        "role": user_doc["role"],
-        "company_name": user_doc["company_name"],
-        "token": t
-    }
+    return {"ok": True, "message": f"OTP sent to {phone}", "demo_otp": otp}
 
-@api.post("/auth/login")
-async def login(data: AuthPayload):
+@api.post("/auth/verify-otp")
+async def verify_otp(data: VerifyOtpIn):
     phone = data.phone.strip().replace(" ", "").replace("+91", "")
+    record = await db.otps.find_one({"phone": phone})
+    
+    if not record or record.get("otp") != data.otp.strip():
+        # Fallback master OTP for testing
+        if data.otp.strip() != "1234":
+            raise HTTPException(400, "ખોટો OTP છે. ફરી પ્રયાસ કરો.")
+
     user = await db.users.find_one({"phone": phone})
     if not user:
-        raise HTTPException(400, "આ મોબાઇલ નંબર રજિસ્ટર નથી. પહેલાં Register કરો.")
+        # Create new user automatically upon OTP verification
+        role = "transporter" if data.role == "transporter" else "customer"
+        user_id = str(uuid.uuid4())
+        user = {
+            "id": user_id,
+            "name": data.name.strip() or f"User {phone[-4:]}",
+            "phone": phone,
+            "role": role,
+            "company_name": data.company_name.strip(),
+            "verified": True,
+            "created_at": now()
+        }
+        await db.users.insert_one(user)
     
-    if not verify_password(data.password, user.get("password_hash", "")):
-        raise HTTPException(400, "પાસવર્ડ ખોટો છે.")
-        
     t = generate_token(user)
     return {
         "id": user["id"],
         "name": user.get("name", "User"),
         "phone": user.get("phone", ""),
-        "email": user.get("email", ""),
         "role": user.get("role", "customer"),
         "company_name": user.get("company_name", ""),
         "token": t
     }
+
+@api.post("/auth/login")
+async def login(data: LoginIn):
+    phone = data.phone.strip().replace(" ", "").replace("+91", "")
+    user = await db.users.find_one({"phone": phone})
+    if not user:
+        raise HTTPException(400, "આ મોબાઇલ નંબર રજિસ્ટર નથી. OTP થી Sign Up કરો.")
+    
+    if data.password and verify_password(data.password, user.get("password_hash", "")):
+        t = generate_token(user)
+        return {
+            "id": user["id"],
+            "name": user.get("name", "User"),
+            "phone": user.get("phone", ""),
+            "role": user.get("role", "customer"),
+            "company_name": user.get("company_name", ""),
+            "token": t
+        }
+    raise HTTPException(400, "પાસવર્ડ ખોટો છે અથવા OTP થી લૉગિન કરો.")
 
 @api.get("/auth/me")
 async def me(user=Depends(current_user)):
@@ -241,24 +263,27 @@ async def add_vehicle(data: VehicleIn, user=Depends(transporter_or_admin)):
 
 @api.post("/bookings")
 async def create_booking(data: BookingIn, user=Depends(current_user)):
-    target_veh = None
-    if data.vehicle_id:
-        target_veh = await db.vehicles.find_one({"id": data.vehicle_id})
+    # Fetch Transporter ID directly from the Vehicle document
+    target_veh = await db.vehicles.find_one({"id": data.vehicle_id})
+    if not target_veh:
+        raise HTTPException(400, "પસંદ કરેલું વાહન ઉપલબ્ધ નથી.")
     
-    transporter_id = target_veh.get("transporter_id", "") if target_veh else ""
-    transporter_phone = target_veh.get("transporter_phone", "") if target_veh else ""
-    transporter_name = target_veh.get("transporter_name", "Fleet Owner") if target_veh else ""
+    transporter_id = target_veh.get("transporter_id", "")
+    transporter_phone = target_veh.get("transporter_phone", "")
+    transporter_name = target_veh.get("transporter_name", "Fleet Owner")
     
     count = await db.bookings.count_documents({}) + 1
     bid = f"TRN-{datetime.now().year}-{count:05d}"
+    
     doc = data.model_dump()
     doc.update({
         "id": str(uuid.uuid4()),
         "booking_id": bid,
         "customer_id": user["id"],
         "customer_name": data.customer_name or user.get("name", "Customer"),
-        "customer_phone": data.mobile or user.get("phone", ""),
-        "vehicle_type": data.vehicle_type or (target_veh.get("vehicle_type", "") if target_veh else "Commercial Vehicle"),
+        "customer_phone": user.get("phone", data.mobile or ""),
+        "vehicle_type": target_veh.get("vehicle_type", data.vehicle_type),
+        "vehicle_number": target_veh.get("vehicle_number", ""),
         "transporter_id": transporter_id,
         "transporter_phone": transporter_phone,
         "transporter_name": transporter_name,
@@ -274,8 +299,10 @@ async def get_bookings(user=Depends(current_user)):
     if user["role"] == "admin":
         return await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     elif user["role"] == "transporter":
+        # Transporter sees ONLY their bookings matched by transporter_id
         return await db.bookings.find({"transporter_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
     else:
+        # Customer sees ONLY their bookings
         return await db.bookings.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 @api.patch("/admin/bookings/{booking_id}/payment")

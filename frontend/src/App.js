@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { BrowserRouter, Link, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ArrowRight, CircleUserRound, LogOut, Plus, Route as RouteIcon, Truck, Phone, Mail, MapPin, CheckCircle, ShieldCheck, Search, Filter } from "lucide-react";
+import { ArrowRight, CircleUserRound, LogOut, Plus, Route as RouteIcon, Truck, Phone, Mail, MapPin, CheckCircle, ShieldCheck, KeyRound } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import "./App.css";
 
-const API = "https://transit-1-l2b5.onrender.com/api";
+const API = "https://transit-ulsq.onrender.com/api";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const api = axios.create({ baseURL: API });
 
@@ -42,7 +42,6 @@ function Header({ user, setUser }) {
         <Link className={loc.pathname === "/" ? "active" : ""} to="/">Home</Link>
         <Link className={loc.pathname === "/vehicles" ? "active" : ""} to="/vehicles">Available Fleet</Link>
         <Link className={loc.pathname === "/about" ? "active" : ""} to="/about">About Us</Link>
-        <Link className={loc.pathname === "/services" ? "active" : ""} to="/services">Services</Link>
         <Link className={loc.pathname === "/contact" ? "active" : ""} to="/contact">Contact Us</Link>
       </nav>
       <div className="header-actions">
@@ -56,7 +55,7 @@ function Header({ user, setUser }) {
             </button>
           </div>
         ) : (
-          <Link to="/login" className="button button-outline">Login / Register</Link>
+          <Link to="/login" className="button button-outline">Login with Mobile</Link>
         )}
         <Link to="/vehicles" className="button button-primary header-book">
           Book Vehicle <ArrowRight size={16} />
@@ -66,68 +65,69 @@ function Header({ user, setUser }) {
   );
 }
 
-function Footer() {
-  return (
-    <footer style={{ background: "#0f172a", color: "#94a3b8", padding: "40px 5%", marginTop: 80, borderTop: "1px solid #1e293b" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 30 }}>
-        <div>
-          <h3 style={{ color: "#fff", marginBottom: 12 }}>SACHIN LOGISTICS</h3>
-          <p style={{ fontSize: 14 }}>Gujarat's leading open logistics network directly connecting local fleet owners with business load requirements.</p>
-        </div>
-        <div>
-          <h4 style={{ color: "#fff", marginBottom: 12 }}>Quick Links</h4>
-          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, fontSize: 14 }}>
-            <li><Link to="/" style={{ color: "#94a3b8", textDecoration: "none" }}>Home</Link></li>
-            <li><Link to="/about" style={{ color: "#94a3b8", textDecoration: "none" }}>About Us</Link></li>
-            <li><Link to="/services" style={{ color: "#94a3b8", textDecoration: "none" }}>Our Services</Link></li>
-            <li><Link to="/contact" style={{ color: "#94a3b8", textDecoration: "none" }}>Contact Support</Link></li>
-          </ul>
-        </div>
-        <div>
-          <h4 style={{ color: "#fff", marginBottom: 12 }}>Direct Contact</h4>
-          <p style={{ fontSize: 14, marginBottom: 6 }}><Phone size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> +91 97255 06630</p>
-          <p style={{ fontSize: 14, marginBottom: 6 }}><Mail size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> admin@transitroute.in</p>
-          <p style={{ fontSize: 14 }}><MapPin size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> Ahmedabad - Mehsana Highway, Gujarat</p>
-        </div>
-      </div>
-      <div style={{ textAlign: "center", borderTop: "1px solid #1e293b", marginTop: 30, paddingTop: 20, fontSize: 13 }}>
-        © 2026 Sachin Logistics Platform. All Rights Reserved.
-      </div>
-    </footer>
-  );
-}
-
 function Status({ value }) {
   return <span className={`status status-${(value || "available").toLowerCase().replaceAll(" ", "-")}`}>{value}</span>;
 }
 
 function Auth({ setUser }) {
-  const [mode, setMode] = useState("login");
+  const [step, setStep] = useState("enter_phone"); // "enter_phone" | "enter_otp"
   const [role, setRole] = useState("customer");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const nav = useNavigate();
 
-  const handleAuth = async (e) => {
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (phone.length < 10) return toast.error("૧૦ આંકડાનો સાચો મોબાઈલ નંબર નાખો");
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/send-otp", { phone });
+      toast.success(res.data.message || "OTP Sent!");
+      if (res.data.demo_otp) {
+        toast.info(`તમારો OTP: ${res.data.demo_otp}`, { duration: 8000 });
+        setOtp(res.data.demo_otp);
+      }
+      setStep("enter_otp");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to send OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-      const payload = mode === "login" ? { phone, password } : { name, phone, password, role, company_name: companyName };
-      const res = await api.post(endpoint, payload);
-      
+      const res = await api.post("/auth/verify-otp", { phone, otp, name, role, company_name: companyName });
       if (res.data?.token) localStorage.setItem("transit_token", res.data.token);
       setUser(res.data);
-      toast.success(mode === "login" ? "Logged in successfully!" : "Account created successfully!");
-      
-      if (res.data.role === "admin") nav("/admin");
-      else if (res.data.role === "transporter") nav("/transporter-dashboard");
+      toast.success("Mobile Verified Successfully!");
+      if (res.data.role === "transporter") nav("/transporter-dashboard");
       else nav("/customer-dashboard");
     } catch (err) {
-      toast.error(err.response?.data?.detail || err.message || "Auth failed");
+      toast.error(err.response?.data?.detail || "Invalid OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/login", { phone, password: adminPassword });
+      if (res.data?.token) localStorage.setItem("transit_token", res.data.token);
+      setUser(res.data);
+      toast.success("Admin Logged in!");
+      nav("/admin");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Admin login failed");
     } finally {
       setLoading(false);
     }
@@ -135,87 +135,110 @@ function Auth({ setUser }) {
 
   return (
     <main className="auth-page">
-      <div className="auth-form" style={{ maxWidth: 440, margin: "40px auto", padding: 24, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-          <button type="button" className={`button ${mode === "login" ? "button-primary" : "button-quiet"}`} style={{ flex: 1 }} onClick={() => setMode("login")}>Sign in</button>
-          <button type="button" className={`button ${mode === "register" ? "button-primary" : "button-quiet"}`} style={{ flex: 1 }} onClick={() => setMode("register")}>Register</button>
+      <div className="auth-form" style={{ maxWidth: 420, margin: "40px auto", padding: 28, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <h2>{isAdminMode ? "Admin Login" : "Mobile OTP Login"}</h2>
+          <p style={{ fontSize: 13, color: "#64748b" }}>{isAdminMode ? "Password login for Super Admin" : "Quick verification via OTP"}</p>
         </div>
 
-        <h2>{mode === "login" ? "Mobile Login" : "Create Account"}</h2>
-        
-        <form onSubmit={handleAuth} style={{ marginTop: 16 }}>
-          {mode === "register" && (
-            <>
+        {isAdminMode ? (
+          <form onSubmit={handleAdminLogin}>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>ADMIN MOBILE</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="9725506630" />
+            </div>
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>PASSWORD</label>
+              <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} required placeholder="Transit@2026!" />
+            </div>
+            <button type="submit" disabled={loading} className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>
+              {loading ? "Authenticating..." : "Admin Sign in"}
+            </button>
+            <button type="button" onClick={() => setIsAdminMode(false)} className="button button-quiet" style={{ width: "100%", marginTop: 10, fontSize: 13 }}>
+              Back to Mobile OTP Login
+            </button>
+          </form>
+        ) : step === "enter_phone" ? (
+          <form onSubmit={handleSendOtp}>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>I AM A:</label>
+              <select value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="customer">Customer (મારે સામાન મોકલવો છે)</option>
+                <option value="transporter">Transporter (હું વાહન માલિક છું)</option>
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>{role === "transporter" ? "OWNER NAME" : "FULL NAME"}</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="તમારું નામ" />
+            </div>
+            {role === "transporter" && (
               <div className="field" style={{ marginBottom: 12 }}>
-                <label>I AM A:</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="customer">Customer (મારે સામાન મોકલવો છે)</option>
-                  <option value="transporter">Transporter (હું વાહન માલિક છું)</option>
-                </select>
+                <label>TRANSPORT / FLEET NAME</label>
+                <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Mahadev Transport" />
               </div>
-              <div className="field" style={{ marginBottom: 12 }}>
-                <label>{role === "transporter" ? "OWNER NAME" : "FULL NAME"}</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Enter full name" />
-              </div>
-              {role === "transporter" && (
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>TRANSPORT / FLEET NAME</label>
-                  <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Mahadev Roadways" />
-                </div>
-              )}
-            </>
-          )}
-          <div className="field" style={{ marginBottom: 12 }}>
-            <label>MOBILE NUMBER</label>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="10-digit mobile number" maxLength={10} />
-          </div>
-          <div className="field" style={{ marginBottom: 16 }}>
-            <label>PASSWORD</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
-          </div>
-          <button type="submit" disabled={loading} className="button button-primary" style={{ width: "100%", padding: "12px", justifyContent: "center" }}>
-            {loading ? "Processing..." : mode === "login" ? "Sign in with Mobile" : "Create Account"}
-          </button>
-        </form>
+            )}
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>MOBILE NUMBER</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="10-digit mobile number" maxLength={10} />
+            </div>
+            <button type="submit" disabled={loading} className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>
+              {loading ? "Sending OTP..." : "Get OTP Verification"}
+            </button>
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <button type="button" onClick={() => setIsAdminMode(true)} style={{ background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer" }}>
+                Super Admin Login 👉
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp}>
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>ENTER 4-DIGIT OTP SENT TO {phone}</label>
+              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} required placeholder="1234" style={{ fontSize: 20, textAlign: "center", letterSpacing: 4 }} />
+            </div>
+            <button type="submit" disabled={loading} className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>
+              {loading ? "Verifying..." : "Verify & Continue"}
+            </button>
+            <button type="button" onClick={() => setStep("enter_phone")} className="button button-quiet" style={{ width: "100%", marginTop: 8, fontSize: 13 }}>
+              Change Mobile Number
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );
 }
 
 function FleetSearchPage({ vehicles = [] }) {
-  const [searchCity, setSearchCity] = useState("");
   const [selectedType, setSelectedType] = useState("All");
 
   const filtered = vehicles.filter((v) => {
-    const matchType = selectedType === "All" || v.vehicle_type.toLowerCase().includes(selectedType.toLowerCase());
-    return matchType;
+    return selectedType === "All" || v.vehicle_type.toLowerCase().includes(selectedType.toLowerCase());
   });
 
   return (
     <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro" style={{ marginBottom: 30 }}>
         <h1>Search & Book Vehicles</h1>
-        <p>Find available commercial vehicles across Gujarat with direct rates.</p>
+        <p>Direct contact with Gujarat's verified fleet owners at direct rates.</p>
       </div>
 
-      {/* Filter Box */}
-      <div style={{ background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 30 }}>
+      <div style={{ background: "#fff", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 24, maxWidth: 350 }}>
         <div className="field">
-          <label>VEHICLE CATEGORY</label>
+          <label>SELECT VEHICLE TYPE</label>
           <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-            <option value="All">All Types (બધા વાહનો)</option>
+            <option value="All">All Commercial Vehicles</option>
             <option value="Tata Ace">Tata Ace / Chhota Hathi</option>
             <option value="Bolero">Bolero Pickup</option>
             <option value="Eicher">Eicher 14/19 Ft</option>
-            <option value="Truck">Heavy Truck / Trailer</option>
+            <option value="Truck">Heavy Truck</option>
           </select>
         </div>
       </div>
 
-      {/* Grid */}
       <div className="vehicle-grid">
         {filtered.length === 0 ? (
-          <p>No vehicles found matching your criteria.</p>
+          <p>No vehicles found. Transporters can register vehicles to appear here.</p>
         ) : (
           filtered.map((v) => (
             <article className="vehicle-card" key={v.id}>
@@ -223,9 +246,9 @@ function FleetSearchPage({ vehicles = [] }) {
               <div className="vehicle-info">
                 <div className="eyebrow">{v.size} · {v.capacity}</div>
                 <h3>{v.vehicle_type}</h3>
-                {v.transporter_name && <small style={{ color: "#64748b" }}>Owner: {v.transporter_name}</small>}
+                {v.transporter_name && <p style={{ fontSize: 13, color: "#475569" }}>Owner: <b>{v.transporter_name}</b></p>}
                 <div className="vehicle-rate" style={{ marginTop: 8 }}>₹{v.rate_per_km}/km</div>
-                <div className="card-actions" style={{ marginTop: 12 }}>
+                <div className="card-actions" style={{ marginTop: 14 }}>
                   <Link to={`/book?vehicle_id=${v.id}`} className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>
                     Book Vehicle <ArrowRight size={15} />
                   </Link>
@@ -259,7 +282,7 @@ function TransporterDashboard({ user }) {
     e.preventDefault();
     try {
       await api.post("/vehicles", newVeh);
-      toast.success("Vehicle registered!");
+      toast.success("તમારું વાહન સફળતાપૂર્વક રજીસ્ટર થઈ ગયું!");
       loadData();
     } catch { toast.error("Failed to add vehicle"); }
   };
@@ -268,9 +291,9 @@ function TransporterDashboard({ user }) {
     <main className="page" style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
         <div>
-          <div className="eyebrow">TRANSPORTER FLEET PANEL</div>
+          <div className="eyebrow">TRANSPORTER DASHBOARD</div>
           <h1>{user?.company_name || user?.name}</h1>
-          <p>Phone: {user?.phone} · Only your orders and vehicles are visible here.</p>
+          <p>📱 {user?.phone} · ફક્ત તમારા ઓર્ડર અને વાહનો અહીં દેખાશે.</p>
         </div>
       </div>
 
@@ -282,34 +305,38 @@ function TransporterDashboard({ user }) {
 
       {tab === "Orders" && (
         <div>
-          <h2>My Assigned Orders ({orders.length})</h2>
-          <div className="booking-table" style={{ marginTop: 16 }}>
-            <div className="table-head"><span>Order ID</span><span>Customer</span><span>Route</span><span>Fare</span><span>Payment</span><span>Status</span></div>
-            {orders.map((b) => (
-              <div className="table-row" key={b.booking_id}>
-                <span><b>{b.booking_id}</b></span>
-                <span>{b.customer_name} ({b.customer_phone})</span>
-                <span>{b.pickup_city} → {b.delivery_city}</span>
-                <span>{money(b.estimated_total)}</span>
-                <Status value={b.payment_status} />
-                <Status value={b.status} />
-              </div>
-            ))}
-          </div>
+          <h2>તમને મળેલા ઓર્ડર્સ ({orders.length})</h2>
+          {orders.length === 0 ? (
+            <p style={{ marginTop: 14, color: "#64748b" }}>હાલમાં કોઈ નવો ઓર્ડર મળ્યો નથી.</p>
+          ) : (
+            <div className="booking-table" style={{ marginTop: 16 }}>
+              <div className="table-head"><span>Order ID</span><span>Customer (Mobile)</span><span>Route</span><span>Fare</span><span>Payment</span><span>Status</span></div>
+              {orders.map((b) => (
+                <div className="table-row" key={b.booking_id}>
+                  <span><b>{b.booking_id}</b></span>
+                  <span>{b.customer_name}<br/><small>📱 {b.customer_phone}</small></span>
+                  <span>{b.pickup_city} → {b.delivery_city}</span>
+                  <span>{money(b.estimated_total)}</span>
+                  <Status value={b.payment_status} />
+                  <Status value={b.status} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {tab === "My Fleet" && (
         <div>
           <form onSubmit={handleAddVehicle} style={{ background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 24 }}>
-            <h3>+ Register Vehicle</h3>
+            <h3>+ નવું વાહન રજીસ્ટર કરો</h3>
             <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
-              <div className="field"><label>VEHICLE TYPE</label><input placeholder="e.g. Tata Ace / Bolero" value={newVeh.vehicle_type} onChange={(e) => setNewVeh({ ...newVeh, vehicle_type: e.target.value })} required /></div>
+              <div className="field"><label>VEHICLE TYPE</label><input placeholder="Tata Ace / Bolero" value={newVeh.vehicle_type} onChange={(e) => setNewVeh({ ...newVeh, vehicle_type: e.target.value })} required /></div>
               <div className="field"><label>PLATE NO.</label><input placeholder="GJ-02-XX-1234" value={newVeh.vehicle_number} onChange={(e) => setNewVeh({ ...newVeh, vehicle_number: e.target.value })} required /></div>
               <div className="field"><label>CAPACITY</label><input placeholder="1.5 Ton" value={newVeh.capacity} onChange={(e) => setNewVeh({ ...newVeh, capacity: e.target.value })} required /></div>
               <div className="field"><label>RATE / KM (₹)</label><input type="number" value={newVeh.rate_per_km} onChange={(e) => setNewVeh({ ...newVeh, rate_per_km: Number(e.target.value) })} required /></div>
             </div>
-            <button type="submit" className="button button-primary" style={{ marginTop: 14 }}><Plus size={16} /> Add Vehicle</button>
+            <button type="submit" className="button button-primary" style={{ marginTop: 14 }}><Plus size={16} /> Save Vehicle</button>
           </form>
           <div className="booking-table">
             <div className="table-head"><span>Type</span><span>Number</span><span>Capacity</span><span>Rate</span></div>
@@ -342,21 +369,18 @@ function SuperAdminPanel() {
   return (
     <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
-        <div>
-          <div className="eyebrow">PLATFORM OWNER DESK</div>
-          <h1>Super Admin Control</h1>
-          <p>Manage all orders, verify customer/transporter direct numbers & approve payments.</p>
-        </div>
+        <h1>Super Admin Control Panel</h1>
+        <p>Master overview of all customer loads, transporter assignments and payment gateway approvals.</p>
       </div>
 
-      <h2 style={{ marginTop: 24 }}>All Platform Bookings & Payment Gateway Approvals</h2>
+      <h2 style={{ marginTop: 24 }}>All Platform Bookings ({data.bookings?.length || 0})</h2>
       <div className="booking-table" style={{ marginTop: 16 }}>
-        <div className="table-head"><span>Order ID</span><span>Customer (Phone)</span><span>Transporter (Phone)</span><span>Amount</span><span>Payment</span><span>Action</span></div>
+        <div className="table-head"><span>Order ID</span><span>Customer Contact</span><span>Transporter Contact</span><span>Amount</span><span>Payment</span><span>Action</span></div>
         {(data.bookings || []).map((b) => (
           <div className="table-row" key={b.booking_id}>
             <span><b>{b.booking_id}</b></span>
-            <span>{b.customer_name}<br /><small style={{ color: "#2563eb" }}>📱 {b.customer_phone}</small></span>
-            <span>{b.transporter_name}<br /><small style={{ color: "#16a34a" }}>📱 {b.transporter_phone || "Not Assigned"}</small></span>
+            <span>{b.customer_name}<br /><small style={{ color: "#2563eb", fontWeight: "bold" }}>📱 {b.customer_phone}</small></span>
+            <span>{b.transporter_name}<br /><small style={{ color: "#16a34a", fontWeight: "bold" }}>📱 {b.transporter_phone || "Pending"}</small></span>
             <span>{money(b.estimated_total)}</span>
             <Status value={b.payment_status} />
             <span className="row-actions">
@@ -383,11 +407,11 @@ function CustomerDashboard({ user }) {
     <main className="page" style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 5%" }}>
       <div className="page-intro compact">
         <h1>Welcome, {user?.name}</h1>
-        <p>📱 {user?.phone} · Customer Load Panel</p>
+        <p>📱 {user?.phone} · My Load Bookings</p>
       </div>
-      <h2 style={{ marginTop: 20 }}>My Booking Status</h2>
+      <h2 style={{ marginTop: 20 }}>My Dispatches ({bookings.length})</h2>
       <div className="booking-table" style={{ marginTop: 16 }}>
-        <div className="table-head"><span>Booking ID</span><span>Route</span><span>Fare</span><span>Payment Approval</span><span>Dispatch Status</span></div>
+        <div className="table-head"><span>Booking ID</span><span>Route</span><span>Fare</span><span>Payment</span><span>Dispatch Status</span></div>
         {bookings.map((b) => (
           <div className="table-row" key={b.booking_id}>
             <span><b>{b.booking_id}</b></span>
@@ -403,35 +427,46 @@ function CustomerDashboard({ user }) {
 }
 
 function BookingPage({ vehicles = [], user }) {
-  const [form, setForm] = useState({ vehicle_id: vehicles[0]?.id || "", pickup_city: "Mehsana", delivery_city: "Ahmedabad", approximate_km: 70 });
+  const loc = useLocation();
   const nav = useNavigate();
+  const searchParams = new URLSearchParams(loc.search);
+  const targetId = searchParams.get("vehicle_id") || vehicles[0]?.id;
+
+  const [form, setForm] = useState({ vehicle_id: targetId || "", pickup_city: "Mehsana", delivery_city: "Ahmedabad", approximate_km: 70 });
+
+  useEffect(() => {
+    if (targetId) setForm((prev) => ({ ...prev, vehicle_id: targetId }));
+  }, [targetId]);
+
   const selectedVeh = vehicles.find((v) => v.id === form.vehicle_id) || vehicles[0] || {};
   const est = Math.max(Number(selectedVeh.minimum_fare || 1500), Number(selectedVeh.rate_per_km || 25) * Number(form.approximate_km || 70));
 
   const handleBooking = async (e) => {
     e.preventDefault();
-    if (!user) { toast.error("Please login first"); nav("/login"); return; }
+    if (!user) { toast.error("ઓર્ડર બુક કરવા માટે પહેલાં લૉગિન કરો"); nav("/login"); return; }
     try {
       await api.post("/bookings", { ...form, vehicle_type: selectedVeh.vehicle_type, estimated_total: est });
-      toast.success("Order Placed! Waiting for Admin Payment Approval.");
+      toast.success("ઓર્ડર બુક થઈ ગયો! એડમિન પેમેન્ટ એપ્રૂવલની રાહ જુઓ.");
       nav("/customer-dashboard");
-    } catch { toast.error("Booking failed"); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Booking failed");
+    }
   };
 
   return (
     <main className="page" style={{ maxWidth: 700, margin: "0 auto", padding: "20px 5%" }}>
-      <h2>Confirm Vehicle Dispatch</h2>
+      <h2>Book Vehicle Dispatch</h2>
       <form onSubmit={handleBooking} style={{ background: "#fff", padding: 24, borderRadius: 12, marginTop: 16, border: "1px solid #e2e8f0" }}>
         <div className="field" style={{ marginBottom: 12 }}>
-          <label>VEHICLE</label>
+          <label>SELECTED VEHICLE</label>
           <select value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })}>
-            {vehicles.map((v) => <option key={v.id} value={v.id}>{v.vehicle_type} (₹{v.rate_per_km}/km) - {v.transporter_name}</option>)}
+            {vehicles.map((v) => <option key={v.id} value={v.id}>{v.vehicle_type} (₹{v.rate_per_km}/km) - {v.transporter_name || "Transporter"}</option>)}
           </select>
         </div>
         <div className="field" style={{ marginBottom: 12 }}><label>FROM CITY</label><input value={form.pickup_city} onChange={(e) => setForm({ ...form, pickup_city: e.target.value })} required /></div>
         <div className="field" style={{ marginBottom: 12 }}><label>TO CITY</label><input value={form.delivery_city} onChange={(e) => setForm({ ...form, delivery_city: e.target.value })} required /></div>
-        <div className="field" style={{ marginBottom: 16 }}><label>TOTAL ESTIMATE</label><input value={money(est)} disabled style={{ fontWeight: "bold", background: "#f8fafc" }} /></div>
-        <button type="submit" className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>Send Booking Request</button>
+        <div className="field" style={{ marginBottom: 16 }}><label>ESTIMATED TOTAL (₹)</label><input value={money(est)} disabled style={{ fontWeight: "bold", background: "#f8fafc" }} /></div>
+        <button type="submit" className="button button-primary" style={{ width: "100%", justifyContent: "center" }}>Confirm Dispatch Booking</button>
       </form>
     </main>
   );
@@ -441,9 +476,7 @@ function About() {
   return (
     <main className="page" style={{ maxWidth: 900, margin: "0 auto", padding: "40px 5%" }}>
       <h1>About Sachin Logistics</h1>
-      <p style={{ marginTop: 16, fontSize: 16, color: "#475569" }}>
-        Sachin Logistics is Gujarat’s premier technology-driven open logistics network. We bridge the gap between verified commercial vehicle owners and industrial/agricultural cargo customers.
-      </p>
+      <p style={{ marginTop: 16, fontSize: 16, color: "#475569" }}>Direct commercial vehicle connectivity across Gujarat with verified owners and guaranteed fair pricing.</p>
     </main>
   );
 }
@@ -452,7 +485,6 @@ function Contact() {
   return (
     <main className="page" style={{ maxWidth: 700, margin: "0 auto", padding: "40px 5%" }}>
       <h1>Contact Us</h1>
-      <p style={{ marginTop: 8, color: "#64748b" }}>Direct Dispatch & Admin Helpline</p>
       <div style={{ background: "#fff", padding: 24, borderRadius: 12, marginTop: 20, border: "1px solid #e2e8f0" }}>
         <p><strong>Phone:</strong> +91 97255 06630</p>
         <p style={{ marginTop: 8 }}><strong>Email:</strong> admin@transitroute.in</p>
@@ -481,7 +513,6 @@ export default function App() {
         <Route path="/" element={<FleetSearchPage vehicles={vehicles} />} />
         <Route path="/vehicles" element={<FleetSearchPage vehicles={vehicles} />} />
         <Route path="/about" element={<About />} />
-        <Route path="/services" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/book" element={<BookingPage vehicles={vehicles} user={user} />} />
         <Route path="/login" element={<Auth setUser={setUser} />} />
@@ -490,7 +521,6 @@ export default function App() {
         <Route path="/admin" element={user?.role === "admin" ? <SuperAdminPanel /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-      <Footer />
       <Toaster position="top-right" richColors />
     </BrowserRouter>
   );
